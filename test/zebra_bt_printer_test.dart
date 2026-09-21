@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:zebra_bt_printer/src/bridge/plugin_arguments.dart';
+import 'package:zebra_bt_printer/src/bridge/plugin_result_keys.dart';
 import 'package:zebra_bt_printer/zebra_bt_printer.dart';
 import 'package:zebra_bt_printer/zebra_bt_printer_method_channel.dart';
 
@@ -66,6 +68,31 @@ class MockZebraBtPrinterPlatform
 
   @override
   Future<bool> calibratePrinter({required String mac}) async => true;
+
+  @override
+  Future<CalibrateMediaResult> calibrateMedia({
+    required String mac,
+    CalibrateMediaOptions options = const CalibrateMediaOptions(),
+  }) async {
+    lastMethod = 'calibrateMedia';
+    lastArgs = {'mac': mac, 'options': options};
+    return const CalibrateMediaResult.success(
+      detectedLabelLengthDots: 565,
+      appliedPrintWidthDots: 575,
+    );
+  }
+
+  @override
+  Future<PrinterMediaSnapshot?> getMediaSnapshot({required String mac}) async {
+    lastMethod = 'getMediaSnapshot';
+    lastArgs = {'mac': mac};
+    return const PrinterMediaSnapshot(
+      labelLengthDots: 250,
+      printWidthDots: 600,
+      mediaType: 'label',
+      mediaSenseMode: 'bar',
+    );
+  }
 }
 
 void main() {
@@ -148,14 +175,48 @@ void main() {
     });
   });
 
+  group('CalibrateMediaResult', () {
+    test('fromNativeMap maps success and failure codes', () {
+      final ok = CalibrateMediaResult.fromNativeMap({
+        PluginResultKeys.isSuccess: true,
+        PluginResultKeys.elapsedMs: 1200,
+        PluginResultKeys.detectedLabelLengthDots: 565,
+      });
+      expect(ok.isSuccess, isTrue);
+      expect(ok.elapsed.inMilliseconds, 1200);
+
+      final fail = CalibrateMediaResult.fromNativeMap({
+        PluginResultKeys.isSuccess: false,
+        PluginResultKeys.errorCode: 'CALIBRATE_TIMEOUT',
+        PluginResultKeys.errorMessage: 'timeout',
+        PluginResultKeys.elapsedMs: 45000,
+      });
+      expect(fail.isSuccess, isFalse);
+      expect(fail.errorCode, CalibrateMediaErrorCode.calibrateTimeout);
+    });
+  });
+
+  group('MediaCalibrationProfile', () {
+    test('toMap and fromMap round-trip', () {
+      const profile = MediaCalibrationProfile(
+        printWidthDots: 575,
+        labelLengthDots: 565,
+        mediaSense: MediaSenseMode.bar,
+      );
+      final restored = MediaCalibrationProfile.fromMap(profile.toMap());
+      expect(restored?.printWidthDots, 575);
+      expect(restored?.mediaSense, MediaSenseMode.bar);
+    });
+  });
+
   group('PrinterConfig', () {
     test('defaults serialize to a map', () {
       const config = PrinterConfig();
       final map = config.toMap();
 
-      expect(map['labelWidthDots'], 600);
-      expect(map['labelHeightDots'], 240);
-      expect(map['useSmoothScaling'], true);
+      expect(map[PluginArguments.labelWidthDots], 600);
+      expect(map[PluginArguments.labelHeightDots], 240);
+      expect(map[PluginArguments.useSmoothScaling], true);
     });
 
     test('custom values serialize', () {
@@ -166,9 +227,9 @@ void main() {
       );
       final map = config.toMap();
 
-      expect(map['labelWidthDots'], 800);
-      expect(map['labelHeightDots'], 400);
-      expect(map['useSmoothScaling'], false);
+      expect(map[PluginArguments.labelWidthDots], 800);
+      expect(map[PluginArguments.labelHeightDots], 400);
+      expect(map[PluginArguments.useSmoothScaling], false);
     });
   });
 }

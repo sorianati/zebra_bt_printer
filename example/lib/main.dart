@@ -54,6 +54,24 @@ class _PrinterDemoPageState extends State<PrinterDemoPage> {
     });
   }
 
+  Future<void> _calibrate(MediaCalibrationProfile profile, String label) async {
+    setState(() {
+      _busy = true;
+      _status = '$label…';
+    });
+    final result = await ZebraBtPrinter.calibrateMedia(
+      mac: _macController.text.trim(),
+      options: CalibrateMediaOptions(profile: profile),
+    );
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _status = result.isSuccess
+          ? '$label: OK (length=${result.detectedLabelLengthDots})'
+          : '$label: ${result.userMessage}';
+    });
+  }
+
   Future<void> _checkBluetooth() async {
     final granted = await ZebraBtPrinter.requestPermissions();
     final enabled = await ZebraBtPrinter.isBluetoothEnabled();
@@ -104,6 +122,26 @@ class _PrinterDemoPageState extends State<PrinterDemoPage> {
                         ),
                       ),
               child: const Text('Print text label (Bluetooth)'),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.tonal(
+              onPressed: _busy
+                  ? null
+                  : () => _calibrate(
+                        SorianaMediaProfiles.fenicia24Up,
+                        'Calibrate 24up',
+                      ),
+              child: const Text('Calibrate media — 24up'),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.tonal(
+              onPressed: _busy
+                  ? null
+                  : () => _calibrate(
+                        SorianaMediaProfiles.fenicia12Up,
+                        'Calibrate 12up',
+                      ),
+              child: const Text('Calibrate media — 12up'),
             ),
             const SizedBox(height: 24),
             if (_busy) const LinearProgressIndicator(),

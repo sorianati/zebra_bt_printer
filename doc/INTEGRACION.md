@@ -282,54 +282,59 @@ texto con formato).
 ## 8. Cambio de rollo y calibración
 
 Cuando el operador carga un rollo de **diferente tamaño o tipo** debe calibrar
-la impresora una sola vez para que aprenda el espaciado de las nuevas etiquetas.
+la impresora (o sincronizar el perfil en NVM) **una vez** antes de imprimir con
+el nuevo `PrinterConfig`.
+
+### Recomendado — `calibrateMedia` (v1.6+)
+
+Sincroniza SGD (`media.*`, `ezpl.print_width`), calibra el sensor vía SDK
+(o fallback ZPL), espera fin por status y valida `zpl.label_length` contra el
+perfil. Diseño completo: [DISENO_CALIBRACION_MEDIA.md](DISENO_CALIBRACION_MEDIA.md).
 
 ```dart
-// Configs para cada tipo de rollo
-const configChica = PrinterConfig(
-  labelWidthDots:  600,
-  labelHeightDots: 240,
-  mediaType: LabelMediaType.gap,   // etiqueta die-cut estándar
+// Perfiles Soriana (12up / 24up, marca negra) — o construye el tuyo.
+final profile = SorianaMediaProfiles.fenicia24Up;
+
+final cal = await ZebraBtPrinter.calibrateMedia(
+  mac: mac,
+  options: CalibrateMediaOptions(
+    profile: profile,
+    applyPersistentSettings: true,
+    runSensorCalibration: true,
+    saveSettingsToNvm: true,
+  ),
 );
+if (!cal.isSuccess) {
+  show(cal.userMessage); // p. ej. labelLengthMismatch, calibrateTimeout
+  return;
+}
 
-const configGrande = PrinterConfig(
-  labelWidthDots:  600,
-  labelHeightDots: 600,
-  mediaType: LabelMediaType.mark,  // rollo con marca negra en el reverso
+// Impresión por job (sigue usando ^PW/^LL/^MNB en cada etiqueta)
+final result = await ZebraBtPrinter.printImageBluetooth(
+  mac: mac,
+  imageBase64: imagenBase64,
+  config: PrinterConfig(
+    labelWidthDots: 600,
+    labelHeightDots: 250,
+    mediaType: LabelMediaType.mark,
+  ),
 );
-
-/// Llamar UNA VEZ al cargar un nuevo rollo.
-/// La impresora avanza 1-2 etiquetas midiendo las marcas (~3 seg).
-Future<void> calibrarImpresora(String mac) async {
-  final ok = await ZebraBtPrinter.calibratePrinter(mac: mac);
-  if (!ok) throw Exception('No se pudo calibrar la impresora');
-}
-
-/// Flujo completo al cambiar al rollo grande con marca negra.
-Future<void> cambiarAEtiquetaGrande(String mac, String imagenBase64) async {
-  await calibrarImpresora(mac);      // ← solo la primera vez por rollo
-  final result = await ZebraBtPrinter.printImageBluetooth(
-    mac: mac,
-    imageBase64: imagenBase64,
-    config: configGrande,
-  );
-  if (!result.isSuccess) throw Exception(result.errorMessage);
-}
-
-/// Flujo completo al cambiar al rollo chico (gap, sin calibración necesaria).
-Future<void> cambiarAEtiquetaChica(String mac, String imagenBase64) async {
-  // Las etiquetas gap normalmente no requieren recalibración
-  final result = await ZebraBtPrinter.printImageBluetooth(
-    mac: mac,
-    imageBase64: imagenBase64,
-    config: configChica,
-  );
-  if (!result.isSuccess) throw Exception(result.errorMessage);
-}
 ```
 
+Diagnóstico sin calibrar:
+
+```dart
+final snap = await ZebraBtPrinter.getMediaSnapshot(mac: mac);
+// snap?.labelLengthDots, printWidthDots, mediaSenseMode
+```
+
+### Legacy — `calibratePrinter`
+
+Solo sensor + guardado mínimo (`bool`). Deprecado; usar `calibrateMedia`.
+
 > La calibración se **guarda en la impresora**. No se repite en cada impresión,
-> solo cuando se carga un rollo diferente.
+> solo cuando cambia el rollo lógico. `calibrateMedia` cierra la conexión
+> persistente por defecto (`closeConnectionAfter: true`).
 
 ---
 
@@ -446,7 +451,17 @@ Usa `result.userMessage` en la UI y `result.errorMessage` en logs.
 | `permissionDenied` | `PERMISSION_DENIED` | Se intentó imprimir sin `BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN` concedidos. | Llama a `requestPermissions()` y reintenta. |
 | `printError` | `PRINT_ERROR` | Impresora inalcanzable, apagada, fuera de rango u ocupada. | Reintenta; revisa energía/emparejamiento/rango. |
 | `connectError` | `CONNECT_ERROR` | `connectBluetooth()` no pudo abrir la conexión persistente. | Verifica que la impresora esté encendida y en rango. |
-| `calibrateError` | `CALIBRATE_ERROR` | `calibratePrinter()` falló al enviar `~JC`. | Verifica la conexión e inténtalo de nuevo. |
+| `calibrateError` | `CALIBRATE_ERROR` | `calibratePrinter()` / `calibrateMedia` falló. | Verifica la conexión e inténtalo de nuevo. |
+
+### Calibración de media (`CalibrateMediaErrorCode`)
+
+| Enum | Código nativo | Cuándo |
+| --- | --- | --- |
+| `calibrateTimeout` | `CALIBRATE_TIMEOUT` | La impresora no quedó lista antes del `timeout`. |
+| `labelLengthMismatch` | `LABEL_LENGTH_MISMATCH` | `zpl.label_length` fuera de tolerancia del perfil. |
+| `connectError` | `CONNECT_ERROR` | No hubo conexión BT al calibrar o leer snapshot. |
+| `permissionDenied` | `PERMISSION_DENIED` | Sin permisos Bluetooth. |
+| `unsupportedPlatform` | `UNSUPPORTED_PLATFORM` | iOS (stub). |
 | `disconnectError` | `DISCONNECT_ERROR` | Falló al cerrar la conexión persistente. | Reintenta el cierre; ignora si ya estaba cerrada. |
 | `noActivity` | `NO_ACTIVITY` | Se llamó a `requestPermissions()` sin una Activity en primer plano. | Llámalo desde una pantalla activa. |
 | `permissionRequestInProgress` | `PERMISSION_REQUEST_IN_PROGRESS` | Una segunda solicitud de permisos se superpuso con la primera. | Espera a que termine la primera. |

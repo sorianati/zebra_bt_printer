@@ -24,6 +24,8 @@ Flutter plugin for printing to **Zebra** label printers over **Bluetooth** or
 - Print a plain-text label wrapped in basic ZPL over Bluetooth.
 - Runtime Bluetooth permission handling (Android 12+ and legacy).
 - Typed results (`PrintResult`) — no exceptions to catch in the normal flow.
+- Media calibration (`calibrateMedia`, `getMediaSnapshot`) with optional SGD
+  profile sync — see [`doc/DISENO_CALIBRACION_MEDIA.md`](doc/DISENO_CALIBRACION_MEDIA.md).
 
 ## Quick start
 

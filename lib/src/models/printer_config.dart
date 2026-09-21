@@ -1,3 +1,6 @@
+import '../bridge/label_defaults.dart';
+import '../bridge/plugin_arguments.dart';
+
 /// Marca/tipo de impresora a utilizar.
 enum PrinterType {
   /// Zebra (requiere ZSDK_ANDROID_API.jar)
@@ -64,26 +67,25 @@ class PrinterConfig {
   final int labelTopOffset;
 
   const PrinterConfig({
-    this.labelWidthDots = 600,
-    this.labelHeightDots = 240,
+    this.labelWidthDots = LabelDefaults.defaultLabelWidthDots,
+    this.labelHeightDots = LabelDefaults.defaultLabelHeightDots,
     this.useSmoothScaling = true,
     this.printerType = PrinterType.zebra,
     this.mediaType = LabelMediaType.gap,
     this.allowUpscale = false,
     this.maxLabelLengthDots,
-    this.labelTopOffset = 0,
+    this.labelTopOffset = LabelDefaults.defaultLabelTopOffset,
   });
 
   Map<String, dynamic> toMap() => {
-        'labelWidthDots': labelWidthDots,
-        'labelHeightDots': labelHeightDots,
-        'useSmoothScaling': useSmoothScaling,
-        'printerType': printerType.name,
-        'mediaType': mediaType.name,
-        'allowUpscale': allowUpscale,
-        // null → el plugin usará labelHeightDots * 2 como default
+        PluginArguments.labelWidthDots: labelWidthDots,
+        PluginArguments.labelHeightDots: labelHeightDots,
+        PluginArguments.useSmoothScaling: useSmoothScaling,
+        PluginArguments.printerType: printerType.name,
+        PluginArguments.mediaType: mediaType.name,
+        PluginArguments.allowUpscale: allowUpscale,
         if (maxLabelLengthDots != null)
-          'maxLabelLengthDots': maxLabelLengthDots,
-        'labelTopOffset': labelTopOffset,
+          PluginArguments.maxLabelLengthDots: maxLabelLengthDots,
+        PluginArguments.labelTopOffset: labelTopOffset,
       };
 }

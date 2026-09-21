@@ -1,12 +1,21 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import 'src/models/calibrate_media_options.dart';
+import 'src/models/calibrate_media_result.dart';
 import 'src/models/print_result.dart';
 import 'src/models/printer_config.dart';
+import 'src/models/printer_media_snapshot.dart';
 import 'zebra_bt_printer_method_channel.dart';
 
+export 'src/models/calibrate_media_error_code.dart';
+export 'src/models/calibrate_media_options.dart';
+export 'src/models/calibrate_media_result.dart';
+export 'src/models/media_calibration_profile.dart';
 export 'src/models/print_error_code.dart';
 export 'src/models/print_result.dart';
 export 'src/models/printer_config.dart';
+export 'src/models/printer_media_snapshot.dart';
+export 'src/presets/soriana_media_profiles.dart';
 
 abstract class ZebraBtPrinterPlatform extends PlatformInterface {
   ZebraBtPrinterPlatform() : super(token: _token);
@@ -78,5 +87,18 @@ abstract class ZebraBtPrinterPlatform extends PlatformInterface {
   /// Llamar una vez al cambiar el tipo o tamaño del rollo de etiquetas.
   Future<bool> calibratePrinter({required String mac}) {
     throw UnimplementedError('calibratePrinter() has not been implemented.');
+  }
+
+  /// Calibración de media con perfil opcional y confirmación de fin.
+  Future<CalibrateMediaResult> calibrateMedia({
+    required String mac,
+    CalibrateMediaOptions options = const CalibrateMediaOptions(),
+  }) {
+    throw UnimplementedError('calibrateMedia() has not been implemented.');
+  }
+
+  /// Lectura de SGD de media (`zpl.label_length`, `ezpl.print_width`, etc.).
+  Future<PrinterMediaSnapshot?> getMediaSnapshot({required String mac}) {
+    throw UnimplementedError('getMediaSnapshot() has not been implemented.');
   }
 }

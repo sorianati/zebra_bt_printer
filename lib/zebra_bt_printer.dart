@@ -1,13 +1,22 @@
 library zebra_bt_printer;
 
+export 'src/models/calibrate_media_error_code.dart';
+export 'src/models/calibrate_media_options.dart';
+export 'src/models/calibrate_media_result.dart';
+export 'src/models/media_calibration_profile.dart';
 export 'src/models/print_error_code.dart';
 export 'src/models/print_result.dart';
 export 'src/models/printer_config.dart';
+export 'src/models/printer_media_snapshot.dart';
+export 'src/presets/soriana_media_profiles.dart';
 export 'zebra_bt_printer_platform_interface.dart'
     show ZebraBtPrinterPlatform;
 
+import 'src/models/calibrate_media_options.dart';
+import 'src/models/calibrate_media_result.dart';
 import 'src/models/print_result.dart';
 import 'src/models/printer_config.dart';
+import 'src/models/printer_media_snapshot.dart';
 import 'zebra_bt_printer_platform_interface.dart';
 
 /// Punto de entrada principal del plugin.
@@ -113,14 +122,33 @@ class ZebraBtPrinter {
     return ZebraBtPrinterPlatform.instance.disconnectBluetooth(mac: mac);
   }
 
-  /// Calibra el sensor de media de la impresora enviando el comando ZPL `~JC`.
+  /// Calibra el sensor de media (flujo legacy).
   ///
-  /// La impresora avanzará 1-2 etiquetas para medir el espaciado de las marcas
-  /// o gaps y guardará la nueva calibración. Tarda ~3 segundos.
-  ///
-  /// **Cuándo llamarlo:** una sola vez cada vez que cambies el rollo de etiquetas
-  /// a un tamaño o tipo diferente (p. ej. de 3×1.2" a 3×3" con marcas negras).
+  /// Delega en [calibrateMedia] con sensor activo y sin perfil SGD. Preferir
+  /// [calibrateMedia] al cambiar perfil 12up/24up u otros rollos con marca negra.
+  @Deprecated('Use calibrateMedia(mac: mac) o calibrateMedia con CalibrateMediaOptions')
   static Future<bool> calibratePrinter({required String mac}) {
     return ZebraBtPrinterPlatform.instance.calibratePrinter(mac: mac);
+  }
+
+  /// Calibración de media y sincronización opcional de tamaño persistente (SGD).
+  ///
+  /// Usa el SDK Link-OS cuando está disponible (`toolsUtil.calibrate`), espera
+  /// fin por status y puede validar `zpl.label_length` contra el perfil.
+  static Future<CalibrateMediaResult> calibrateMedia({
+    required String mac,
+    CalibrateMediaOptions options = const CalibrateMediaOptions(),
+  }) {
+    return ZebraBtPrinterPlatform.instance.calibrateMedia(
+      mac: mac,
+      options: options,
+    );
+  }
+
+  /// Lectura de configuración de media en la impresora (diagnóstico).
+  static Future<PrinterMediaSnapshot?> getMediaSnapshot({
+    required String mac,
+  }) {
+    return ZebraBtPrinterPlatform.instance.getMediaSnapshot(mac: mac);
   }
 }

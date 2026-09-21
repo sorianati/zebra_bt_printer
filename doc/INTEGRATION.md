@@ -275,54 +275,40 @@ to print rich, dynamic labels (logos, barcodes, formatted text).
 
 ## 8. Roll change & calibration
 
-When the operator loads a **different roll size or media type**, the printer must
-be calibrated once so it learns the new label spacing.
+When the operator loads a **different roll size or media type**, run
+**`calibrateMedia`** once (recommended) or legacy `calibratePrinter` before
+printing with the new `PrinterConfig`.
+
+See [DISENO_CALIBRACION_MEDIA.md](DISENO_CALIBRACION_MEDIA.md) for the full design.
 
 ```dart
-// Configs for each roll type
-const configSmall = PrinterConfig(
-  labelWidthDots:  600,
-  labelHeightDots: 240,
-  mediaType: LabelMediaType.gap,   // standard die-cut label
+final cal = await ZebraBtPrinter.calibrateMedia(
+  mac: mac,
+  options: CalibrateMediaOptions(
+    profile: SorianaMediaProfiles.fenicia24Up,
+    applyPersistentSettings: true,
+    runSensorCalibration: true,
+    saveSettingsToNvm: true,
+  ),
 );
+if (!cal.isSuccess) {
+  show(cal.userMessage);
+  return;
+}
 
-const configLarge = PrinterConfig(
-  labelWidthDots:  600,
-  labelHeightDots: 600,
-  mediaType: LabelMediaType.mark,  // roll with black marks on the back
+final result = await ZebraBtPrinter.printImageBluetooth(
+  mac: mac,
+  imageBase64: base64Image,
+  config: PrinterConfig(
+    labelWidthDots: 600,
+    labelHeightDots: 250,
+    mediaType: LabelMediaType.mark,
+  ),
 );
-
-/// Call ONCE when loading a new roll.
-/// The printer feeds 1-2 labels to measure the mark spacing (~3 s).
-Future<void> calibratePrinter(String mac) async {
-  final ok = await ZebraBtPrinter.calibratePrinter(mac: mac);
-  if (!ok) throw Exception('Could not calibrate the printer');
-}
-
-/// Full flow when switching to the large black-mark roll.
-Future<void> switchToLargeLabel(String mac, String base64Image) async {
-  await calibratePrinter(mac);     // ← only once per roll change
-  final result = await ZebraBtPrinter.printImageBluetooth(
-    mac: mac,
-    imageBase64: base64Image,
-    config: configLarge,
-  );
-  if (!result.isSuccess) throw Exception(result.errorMessage);
-}
-
-/// Full flow when switching to the small gap roll (no calibration needed).
-Future<void> switchToSmallLabel(String mac, String base64Image) async {
-  final result = await ZebraBtPrinter.printImageBluetooth(
-    mac: mac,
-    imageBase64: base64Image,
-    config: configSmall,
-  );
-  if (!result.isSuccess) throw Exception(result.errorMessage);
-}
 ```
 
-> Calibration is **stored in the printer**. It does not need to be repeated on
-> every print — only when a different roll is loaded.
+> Calibration is **stored in the printer**. `calibrateMedia` closes the
+> persistent BT connection by default (`closeConnectionAfter: true`).
 
 ---
 
@@ -440,7 +426,9 @@ Use `result.userMessage` in the UI and `result.errorMessage` in logs.
 | `permissionDenied` | `PERMISSION_DENIED` | A Bluetooth print was attempted without `BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN` granted. | Call `requestPermissions()` and retry. |
 | `printError` | `PRINT_ERROR` | Printer unreachable, off, out of range, or busy. | Retry, check power/pairing/range. |
 | `connectError` | `CONNECT_ERROR` | `connectBluetooth()` could not open the persistent connection. | Verify the printer is on and in range. |
-| `calibrateError` | `CALIBRATE_ERROR` | `calibratePrinter()` failed to send `~JC`. | Check connection and retry. |
+| `calibrateError` | `CALIBRATE_ERROR` | `calibratePrinter()` / `calibrateMedia` failed. | Check connection and retry. |
+
+**Media calibration** (`CalibrateMediaErrorCode`): `CALIBRATE_TIMEOUT`, `LABEL_LENGTH_MISMATCH`, `CONNECT_ERROR`, `PERMISSION_DENIED`, `UNSUPPORTED_PLATFORM` (iOS).
 | `disconnectError` | `DISCONNECT_ERROR` | Failed to close the persistent connection. | Retry disconnect; ignore if already closed. |
 | `noActivity` | `NO_ACTIVITY` | `requestPermissions()` called with no foreground Activity. | Call from a live screen. |
 | `permissionRequestInProgress` | `PERMISSION_REQUEST_IN_PROGRESS` | A second permission request overlapped the first. | Await the first call before retrying. |
