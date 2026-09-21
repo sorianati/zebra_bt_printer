@@ -1,3 +1,8 @@
+## 1.6.1
+
+* Android: fix Kotlin compile error — call `ZebraPrinter.calibrate()` (SDK
+  `ToolsUtil`) instead of invalid `toolsUtil` property.
+
 ## 1.6.0
 
 * Internal: centralized MethodChannel contract (`lib/src/bridge/`), printer

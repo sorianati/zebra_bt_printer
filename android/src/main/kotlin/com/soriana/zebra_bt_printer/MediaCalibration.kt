@@ -223,7 +223,8 @@ internal object MediaCalibrationSupport {
     private fun runSensorCalibration(conn: Connection) {
         val printer = ZebraPrinterFactory.getInstance(conn)
         try {
-            printer.toolsUtil.calibrate()
+            // ZebraPrinter extends ToolsUtil in the Link-OS SDK (calibrate() on printer).
+            printer.calibrate()
         } catch (_: Exception) {
             conn.write(ZebraZplCommands.CALIBRATE_AND_SAVE.toByteArray(Charsets.UTF_8))
         }
