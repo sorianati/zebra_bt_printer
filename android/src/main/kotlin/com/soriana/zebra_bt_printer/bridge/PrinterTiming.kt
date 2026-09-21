@@ -24,6 +24,9 @@ internal object CalibrationDefaults {
     const val MIN_TIMEOUT_MS = 5_000L
     const val LABEL_LENGTH_TOLERANCE_DOTS = 40
     const val LEGACY_LABEL_LENGTH_TOLERANCE_DOTS = Int.MAX_VALUE
+
+    /** Tras leer longitud OK, espera idle corta antes de devolver éxito. */
+    const val POST_LENGTH_MATCH_IDLE_CAP_MS = 10_000L
 }
 
 internal object PrintLimits {
