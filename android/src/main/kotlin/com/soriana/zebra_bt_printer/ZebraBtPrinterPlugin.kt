@@ -21,6 +21,23 @@ import com.zebra.sdk.comm.TcpConnection
 import com.zebra.sdk.graphics.internal.ZebraImageAndroid
 import com.zebra.sdk.printer.ZebraPrinterFactory
 
+import com.soriana.zebra_bt_printer.bridge.BatchSettleTiming
+import com.soriana.zebra_bt_printer.bridge.LabelDefaults
+import com.soriana.zebra_bt_printer.bridge.NativeErrorCodes
+import com.soriana.zebra_bt_printer.bridge.PaperOutException
+import com.soriana.zebra_bt_printer.bridge.PluginArguments
+import com.soriana.zebra_bt_printer.bridge.PluginChannel
+import com.soriana.zebra_bt_printer.bridge.PluginDiagnosticMessages
+import com.soriana.zebra_bt_printer.bridge.PluginMethods
+import com.soriana.zebra_bt_printer.bridge.PluginPermissions
+import com.soriana.zebra_bt_printer.bridge.PrintLimits
+import com.soriana.zebra_bt_printer.bridge.PrintRetryPolicy
+import com.soriana.zebra_bt_printer.bridge.PrintTimeoutException
+import com.soriana.zebra_bt_printer.bridge.PrinterStatusWaiter
+import com.soriana.zebra_bt_printer.zebra.LabelMediaWireValues
+import com.soriana.zebra_bt_printer.zebra.PrinterTypeValues
+import com.soriana.zebra_bt_printer.zebra.ZplMediaCommands
+
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -41,19 +58,7 @@ class ZebraBtPrinterPlugin :
     private var activityBinding: ActivityPluginBinding? = null
     private var appContext: Context? = null
 
-    private val PERMISSION_REQUEST_CODE = 2001
     private var pendingPermissionsResult: Result? = null
-
-    // Número de reintentos y espera entre intentos cuando la impresora
-    // está ocupada con otro dispositivo.
-    private val MAX_RETRIES    = 3
-    private val RETRY_DELAY_MS = 1500L
-
-    /** Intervalo entre consultas de status al confirmar el fin del lote. */
-    private val BATCH_POLL_INTERVAL_MS = 400L
-
-    /** Tiempo mínimo tras el envío antes de aceptar "listo" (evita falso éxito). */
-    private val BATCH_MIN_SETTLE_MS = 500L
 
     // Conexiones BT persistentes, indexadas por MAC.
     // Permiten reutilizar la misma sesión SPP entre impresiones consecutivas
@@ -75,7 +80,7 @@ class ZebraBtPrinterPlugin :
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         appContext = binding.applicationContext
-        channel   = MethodChannel(binding.binaryMessenger, "zebra_bt_printer")
+        channel   = MethodChannel(binding.binaryMessenger, PluginChannel.NAME)
         channel.setMethodCallHandler(this)
     }
 
@@ -115,27 +120,30 @@ class ZebraBtPrinterPlugin :
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
-            "connectBluetooth"    -> handleConnectBluetooth(call, result)
-            "disconnectBluetooth" -> handleDisconnectBluetooth(call, result)
-            "calibratePrinter"    -> handleCalibratePrinter(call, result)
-            "printImageBluetooth" -> handlePrintImageBluetooth(call, result)
-            "printImageIP"        -> handlePrintImageIP(call, result)
-            "printLabelBluetooth" -> handlePrintLabelBluetooth(call, result)
-            "requestPermissions"  -> handleRequestPermissions(result)
-            "isBluetoothEnabled"  -> handleIsBluetoothEnabled(result)
-            else                  -> result.notImplemented()
+            PluginMethods.CONNECT_BLUETOOTH -> handleConnectBluetooth(call, result)
+            PluginMethods.DISCONNECT_BLUETOOTH -> handleDisconnectBluetooth(call, result)
+            PluginMethods.CALIBRATE_PRINTER -> handleCalibratePrinter(call, result)
+            PluginMethods.CALIBRATE_MEDIA -> handleCalibrateMedia(call, result)
+            PluginMethods.GET_MEDIA_SNAPSHOT -> handleGetMediaSnapshot(call, result)
+            PluginMethods.PRINT_IMAGE_BLUETOOTH -> handlePrintImageBluetooth(call, result)
+            PluginMethods.PRINT_IMAGE_IP -> handlePrintImageIP(call, result)
+            PluginMethods.PRINT_LABEL_BLUETOOTH -> handlePrintLabelBluetooth(call, result)
+            PluginMethods.REQUEST_PERMISSIONS -> handleRequestPermissions(result)
+            PluginMethods.IS_BLUETOOTH_ENABLED -> handleIsBluetoothEnabled(result)
+            else -> result.notImplemented()
         }
     }
 
     // ─────────────────────────── Handlers ────────────────────────────────────
 
     private fun handleConnectBluetooth(call: MethodCall, result: Result) {
-        val mac = call.argument<String>("mac") ?: return result.error("INVALID_ARGS", "mac es requerido", null)
+        val mac = call.argument<String>(PluginArguments.MAC)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.MAC_REQUIRED)
 
         if (!hasBluetoothPermissions()) {
             return result.error(
-                "PERMISSION_DENIED",
-                "Faltan permisos Bluetooth. Llama a requestPermissions() primero.",
+                NativeErrorCodes.PERMISSION_DENIED,
+                PluginDiagnosticMessages.BLUETOOTH_PERMISSIONS_REQUIRED,
                 null,
             )
         }
@@ -145,30 +153,110 @@ class ZebraBtPrinterPlugin :
                 getOrOpenConnection(mac)
                 runOnUiThread(result) { it.success(true) }
             } catch (e: Exception) {
-                runOnUiThread(result) { it.error("CONNECT_ERROR", e.message, null) }
+                runOnUiThread(result) {
+                    it.error(NativeErrorCodes.CONNECT_ERROR, e.message, null)
+                }
             }
         }
     }
 
     private fun handleCalibratePrinter(call: MethodCall, result: Result) {
-        val mac = call.argument<String>("mac") ?: return result.error("INVALID_ARGS", "mac es requerido", null)
+        val mac = call.argument<String>(PluginArguments.MAC)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.MAC_REQUIRED)
         if (!hasBluetoothPermissions()) {
-            return result.error("PERMISSION_DENIED", "Faltan permisos Bluetooth.", null)
+            return result.error(
+                NativeErrorCodes.PERMISSION_DENIED,
+                PluginDiagnosticMessages.BLUETOOTH_PERMISSIONS_CALIBRATE,
+                null,
+            )
         }
         runInBackground {
             try {
                 val conn = getOrOpenConnection(mac)
-                conn.write("~JC".toByteArray())
-                Thread.sleep(3000)
-                runOnUiThread(result) { it.success(true) }
+                val outcome = MediaCalibrationSupport.execute(
+                    conn,
+                    MediaCalibrationSupport.legacyCalibrateOptions(),
+                )
+                runOnUiThread(result) {
+                    if (outcome.isSuccess) {
+                        it.success(true)
+                    } else {
+                        it.error(
+                            outcome.errorCode ?: NativeErrorCodes.CALIBRATE_ERROR,
+                            outcome.errorMessage,
+                            null,
+                        )
+                    }
+                }
             } catch (e: Exception) {
-                runOnUiThread(result) { it.error("CALIBRATE_ERROR", e.message, null) }
+                runOnUiThread(result) {
+                    it.error(NativeErrorCodes.CALIBRATE_ERROR, e.message, null)
+                }
+            }
+        }
+    }
+
+    private fun handleCalibrateMedia(call: MethodCall, result: Result) {
+        val mac = call.argument<String>(PluginArguments.MAC)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.MAC_REQUIRED)
+        if (!hasBluetoothPermissions()) {
+            return result.error(
+                NativeErrorCodes.PERMISSION_DENIED,
+                PluginDiagnosticMessages.BLUETOOTH_PERMISSIONS_CALIBRATE,
+                null,
+            )
+        }
+        val closeAfter = call.argument<Boolean>(PluginArguments.CLOSE_CONNECTION_AFTER) ?: true
+        runInBackground {
+            try {
+                val conn = getOrOpenConnection(mac)
+                val options = MediaCalibrationSupport.parseOptions(call)
+                val outcome = MediaCalibrationSupport.execute(conn, options)
+                if (closeAfter) {
+                    synchronized(persistentConnections) {
+                        if (persistentConnections.remove(mac) != null) {
+                            safeClose(conn)
+                        }
+                    }
+                }
+                runOnUiThread(result) { it.success(outcome.toResultMap()) }
+            } catch (e: Exception) {
+                val code = if (e is java.io.IOException || e.message?.contains("connect", true) == true) {
+                    NativeErrorCodes.CONNECT_ERROR
+                } else {
+                    NativeErrorCodes.CALIBRATE_ERROR
+                }
+                runOnUiThread(result) { it.error(code, e.message, null) }
+            }
+        }
+    }
+
+    private fun handleGetMediaSnapshot(call: MethodCall, result: Result) {
+        val mac = call.argument<String>(PluginArguments.MAC)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.MAC_REQUIRED)
+        if (!hasBluetoothPermissions()) {
+            return result.error(
+                NativeErrorCodes.PERMISSION_DENIED,
+                PluginDiagnosticMessages.BLUETOOTH_PERMISSIONS_CALIBRATE,
+                null,
+            )
+        }
+        runInBackground {
+            try {
+                val conn = getOrOpenConnection(mac)
+                val snapshot = MediaCalibrationSupport.readSnapshot(conn)
+                runOnUiThread(result) { it.success(snapshot.toMap()) }
+            } catch (e: Exception) {
+                runOnUiThread(result) {
+                    it.error(NativeErrorCodes.CONNECT_ERROR, e.message, null)
+                }
             }
         }
     }
 
     private fun handleDisconnectBluetooth(call: MethodCall, result: Result) {
-        val mac = call.argument<String>("mac") ?: return result.error("INVALID_ARGS", "mac es requerido", null)
+        val mac = call.argument<String>(PluginArguments.MAC)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.MAC_REQUIRED)
 
         runInBackground {
             try {
@@ -177,29 +265,35 @@ class ZebraBtPrinterPlugin :
                 }
                 runOnUiThread(result) { it.success(true) }
             } catch (e: Exception) {
-                runOnUiThread(result) { it.error("DISCONNECT_ERROR", e.message, null) }
+                runOnUiThread(result) {
+                    it.error(NativeErrorCodes.DISCONNECT_ERROR, e.message, null)
+                }
             }
         }
     }
 
     private fun handlePrintImageBluetooth(call: MethodCall, result: Result) {
-        val mac         = call.argument<String>("mac")         ?: return result.error("INVALID_ARGS", "mac es requerido", null)
-        val imageBase64 = call.argument<String>("imageBase64") ?: return result.error("INVALID_ARGS", "imageBase64 es requerido", null)
-        val config      = PrintConfig.fromCall(call)
-        val copies      = (call.argument<Int>("copies") ?: 1).coerceIn(1, 999)
+        val mac = call.argument<String>(PluginArguments.MAC)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.MAC_REQUIRED)
+        val imageBase64 = call.argument<String>(PluginArguments.IMAGE_BASE64)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.IMAGE_BASE64_REQUIRED)
+        val config = PrintConfig.fromCall(call)
+        val copies = (call.argument<Int>(PluginArguments.COPIES) ?: PrintLimits.MIN_COPIES)
+            .coerceIn(PrintLimits.MIN_COPIES, PrintLimits.MAX_COPIES)
 
         if (!hasBluetoothPermissions()) {
             return result.error(
-                "PERMISSION_DENIED",
-                "Faltan permisos Bluetooth (BLUETOOTH_CONNECT/BLUETOOTH_SCAN). " +
-                    "Llama a requestPermissions() y acéptalos antes de imprimir.",
+                NativeErrorCodes.PERMISSION_DENIED,
+                PluginDiagnosticMessages.BLUETOOTH_PERMISSIONS_PRINT,
                 null,
             )
         }
 
         runInBackground {
             try {
-                withRetry(MAX_RETRIES) { printImageViaBluetooth(mac, imageBase64, config, copies) }
+                withRetry(PrintRetryPolicy.MAX_RETRIES) {
+                    printImageViaBluetooth(mac, imageBase64, config, copies)
+                }
                 runOnUiThread(result) { it.success(true) }
             } catch (e: Exception) {
                 reportPrintFailure(result, e)
@@ -208,8 +302,10 @@ class ZebraBtPrinterPlugin :
     }
 
     private fun handlePrintImageIP(call: MethodCall, result: Result) {
-        val ip          = call.argument<String>("ip")          ?: return result.error("INVALID_ARGS", "ip es requerido", null)
-        val imageBase64 = call.argument<String>("imageBase64") ?: return result.error("INVALID_ARGS", "imageBase64 es requerido", null)
+        val ip = call.argument<String>(PluginArguments.IP)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.IP_REQUIRED)
+        val imageBase64 = call.argument<String>(PluginArguments.IMAGE_BASE64)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.IMAGE_BASE64_REQUIRED)
         val config      = PrintConfig.fromCall(call)
 
         runInBackground {
@@ -223,21 +319,22 @@ class ZebraBtPrinterPlugin :
     }
 
     private fun handlePrintLabelBluetooth(call: MethodCall, result: Result) {
-        val mac     = call.argument<String>("mac")     ?: return result.error("INVALID_ARGS", "mac es requerido", null)
-        val zplText = call.argument<String>("zplText") ?: return result.error("INVALID_ARGS", "zplText es requerido", null)
+        val mac = call.argument<String>(PluginArguments.MAC)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.MAC_REQUIRED)
+        val zplText = call.argument<String>(PluginArguments.ZPL_TEXT)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.ZPL_TEXT_REQUIRED)
 
         if (!hasBluetoothPermissions()) {
             return result.error(
-                "PERMISSION_DENIED",
-                "Faltan permisos Bluetooth (BLUETOOTH_CONNECT/BLUETOOTH_SCAN). " +
-                    "Llama a requestPermissions() y acéptalos antes de imprimir.",
+                NativeErrorCodes.PERMISSION_DENIED,
+                PluginDiagnosticMessages.BLUETOOTH_PERMISSIONS_PRINT,
                 null,
             )
         }
 
         runInBackground {
             try {
-                withRetry(MAX_RETRIES) { printZplViaBluetooth(mac, zplText) }
+                withRetry(PrintRetryPolicy.MAX_RETRIES) { printZplViaBluetooth(mac, zplText) }
                 runOnUiThread(result) { it.success(true) }
             } catch (e: Exception) {
                 reportPrintFailure(result, e)
@@ -246,7 +343,12 @@ class ZebraBtPrinterPlugin :
     }
 
     private fun handleRequestPermissions(result: Result) {
-        val act = activity ?: return result.error("NO_ACTIVITY", "Activity no disponible", null)
+        val act = activity
+            ?: return result.error(
+                NativeErrorCodes.NO_ACTIVITY,
+                PluginDiagnosticMessages.ACTIVITY_UNAVAILABLE,
+                null,
+            )
 
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             BLUETOOTH_PERMISSIONS_S else BLUETOOTH_PERMISSIONS_LEGACY
@@ -262,14 +364,18 @@ class ZebraBtPrinterPlugin :
 
         if (pendingPermissionsResult != null) {
             return result.error(
-                "PERMISSION_REQUEST_IN_PROGRESS",
-                "Ya hay una solicitud de permisos en curso",
+                NativeErrorCodes.PERMISSION_REQUEST_IN_PROGRESS,
+                PluginDiagnosticMessages.PERMISSION_REQUEST_IN_PROGRESS,
                 null,
             )
         }
 
         pendingPermissionsResult = result
-        ActivityCompat.requestPermissions(act, missing.toTypedArray(), PERMISSION_REQUEST_CODE)
+        ActivityCompat.requestPermissions(
+            act,
+            missing.toTypedArray(),
+            PluginPermissions.REQUEST_CODE,
+        )
     }
 
     /**
@@ -281,7 +387,7 @@ class ZebraBtPrinterPlugin :
         permissions: Array<out String>,
         grantResults: IntArray,
     ): Boolean {
-        if (requestCode != PERMISSION_REQUEST_CODE) return false
+        if (requestCode != PluginPermissions.REQUEST_CODE) return false
 
         val result = pendingPermissionsResult ?: return false
         pendingPermissionsResult = null
@@ -453,56 +559,33 @@ class ZebraBtPrinterPlugin :
     private fun ensurePaperLoaded(conn: Connection) {
         val status = ZebraPrinterFactory.getInstance(conn).currentStatus
         if (status.isPaperOut) {
-            throw PaperOutException("La impresora reporta sin papel (isPaperOut)")
+            throw PaperOutException(PluginDiagnosticMessages.PAPER_OUT_PRE_CHECK)
         }
     }
 
     /**
      * Espera a que el lote encolado termine de procesarse (confirmación al final).
      *
-     * No confirma etiqueta por etiqueta: tras [write]×N hace poll de status hasta
-     * que la impresora esté lista, reporte sin papel, o expire el deadline.
-     *
-     * Deadline: min(120s, 8s + copies × 4s).
-     *
-     * Evita falso éxito inmediato: solo acepta "listo" si ya se vio la impresora
-     * ocupada, o si transcurrió al menos [BATCH_MIN_SETTLE_MS].
+     * Deadline: [BatchSettleTiming.deadlineMs].
      */
     private fun awaitBatchSettled(conn: Connection, copies: Int) {
-        val deadlineMs = minOf(120_000L, 8_000L + copies.toLong() * 4_000L)
-        val startedAt = System.currentTimeMillis()
-        val deadlineAt = startedAt + deadlineMs
-        val printer = ZebraPrinterFactory.getInstance(conn)
-        var sawBusy = false
-
-        while (true) {
-            val status = printer.currentStatus
-            if (status.isPaperOut) {
-                throw PaperOutException("La impresora reporta sin papel tras enviar el lote (isPaperOut)")
-            }
-
-            val bufferEmpty = status.numberOfFormatsInReceiveBuffer <= 0
-            val batchEmpty = status.labelsRemainingInBatch <= 0
-            val idle = status.isReadyToPrint && bufferEmpty && batchEmpty
-
-            if (!idle) {
-                sawBusy = true
-            } else {
-                val elapsed = System.currentTimeMillis() - startedAt
-                if (sawBusy || elapsed >= BATCH_MIN_SETTLE_MS) {
-                    return
-                }
-            }
-
-            if (System.currentTimeMillis() >= deadlineAt) {
-                throw PrintTimeoutException(
-                    "Timeout esperando fin de lote (${deadlineMs}ms, copies=$copies, " +
-                        "ready=${status.isReadyToPrint}, buffer=${status.numberOfFormatsInReceiveBuffer}, " +
-                        "remaining=${status.labelsRemainingInBatch})",
+        val deadlineMs = BatchSettleTiming.deadlineMs(copies)
+        PrinterStatusWaiter.awaitIdle(
+            conn = conn,
+            deadlineMs = deadlineMs,
+            paperOutMessage = PluginDiagnosticMessages.PAPER_OUT_AFTER_BATCH,
+            timeoutException = { ms, status ->
+                PrintTimeoutException(
+                    PluginDiagnosticMessages.batchPrintTimeout(
+                        ms,
+                        copies,
+                        status.isReadyToPrint,
+                        status.numberOfFormatsInReceiveBuffer,
+                        status.labelsRemainingInBatch,
+                    ),
                 )
-            }
-            Thread.sleep(BATCH_POLL_INTERVAL_MS)
-        }
+            },
+        )
     }
 
     // ─────────────────────────── Image utilities ─────────────────────────────
@@ -656,11 +739,15 @@ class ZebraBtPrinterPlugin :
      */
     private fun reportPrintFailure(result: Result, e: Exception) {
         val code = when (e) {
-            is PaperOutException -> "PAPER_OUT"
-            is PrintTimeoutException -> "PRINT_TIMEOUT"
-            else -> "PRINT_ERROR"
+            is PaperOutException -> NativeErrorCodes.PAPER_OUT
+            is PrintTimeoutException -> NativeErrorCodes.PRINT_TIMEOUT
+            else -> NativeErrorCodes.PRINT_ERROR
         }
         runOnUiThread(result) { it.error(code, e.message, null) }
+    }
+
+    private fun invalidArgs(result: Result, message: String) {
+        result.error(NativeErrorCodes.INVALID_ARGS, message, null)
     }
 
     /**
@@ -685,18 +772,12 @@ class ZebraBtPrinterPlugin :
             } catch (e: Exception) {
                 lastError = e
                 if (attempt < maxRetries - 1) {
-                    Thread.sleep(RETRY_DELAY_MS)
+                    Thread.sleep(PrintRetryPolicy.RETRY_DELAY_MS)
                 }
             }
         }
         throw lastError ?: Exception("Error desconocido al imprimir")
     }
-
-    /** Señal de que la impresora reportó sin papel (pre-check o post-lote). */
-    private class PaperOutException(message: String) : Exception(message)
-
-    /** Señal de que el lote no se asentó antes del deadline. */
-    private class PrintTimeoutException(message: String) : Exception(message)
 
     // ─────────────────────────── PrintConfig ─────────────────────────────────
 
@@ -723,23 +804,31 @@ class ZebraBtPrinterPlugin :
     ) {
         /** Comando ZPL correspondiente al tipo de media. */
         val zplMediaCommand: String get() = when (mediaType) {
-            "mark" -> "^MNB"
-            "none" -> "^MNN"
-            else   -> "^MNA"
+            LabelMediaWireValues.MARK -> ZplMediaCommands.MARK
+            LabelMediaWireValues.NONE -> ZplMediaCommands.NONE
+            else -> ZplMediaCommands.GAP
         }
 
         companion object {
             fun fromCall(call: MethodCall): PrintConfig {
-                val labelHeightDots = call.argument<Int>("labelHeightDots") ?: 240
+                val labelHeightDots = call.argument<Int>(PluginArguments.LABEL_HEIGHT_DOTS)
+                    ?: LabelDefaults.DEFAULT_LABEL_HEIGHT_DOTS
                 return PrintConfig(
-                    labelWidthDots     = call.argument<Int>("labelWidthDots")         ?: 600,
-                    labelHeightDots    = labelHeightDots,
-                    useSmoothScaling   = call.argument<Boolean>("useSmoothScaling")   ?: true,
-                    printerType        = call.argument<String>("printerType")         ?: "zebra",
-                    mediaType          = call.argument<String>("mediaType")           ?: "gap",
-                    allowUpscale       = call.argument<Boolean>("allowUpscale")       ?: false,
-                    maxLabelLengthDots = call.argument<Int>("maxLabelLengthDots")     ?: labelHeightDots * 2,
-                    labelTopOffset     = call.argument<Int>("labelTopOffset")         ?: 0,
+                    labelWidthDots = call.argument<Int>(PluginArguments.LABEL_WIDTH_DOTS)
+                        ?: LabelDefaults.DEFAULT_LABEL_WIDTH_DOTS,
+                    labelHeightDots = labelHeightDots,
+                    useSmoothScaling = call.argument<Boolean>(PluginArguments.USE_SMOOTH_SCALING)
+                        ?: true,
+                    printerType = call.argument<String>(PluginArguments.PRINTER_TYPE)
+                        ?: PrinterTypeValues.ZEBRA,
+                    mediaType = call.argument<String>(PluginArguments.MEDIA_TYPE)
+                        ?: LabelMediaWireValues.GAP,
+                    allowUpscale = call.argument<Boolean>(PluginArguments.ALLOW_UPSCALE)
+                        ?: false,
+                    maxLabelLengthDots = call.argument<Int>(PluginArguments.MAX_LABEL_LENGTH_DOTS)
+                        ?: labelHeightDots * LabelDefaults.MAX_LABEL_LENGTH_MULTIPLIER,
+                    labelTopOffset = call.argument<Int>(PluginArguments.LABEL_TOP_OFFSET)
+                        ?: LabelDefaults.DEFAULT_LABEL_TOP_OFFSET,
                 )
             }
         }

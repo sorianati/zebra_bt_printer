@@ -1,5 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zebra_bt_printer/src/bridge/plugin_arguments.dart';
+import 'package:zebra_bt_printer/src/bridge/plugin_channel.dart';
+import 'package:zebra_bt_printer/src/bridge/plugin_methods.dart';
 import 'package:zebra_bt_printer/zebra_bt_printer.dart';
 import 'package:zebra_bt_printer/zebra_bt_printer_method_channel.dart';
 
@@ -7,7 +10,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   final MethodChannelZebraBtPrinter platform = MethodChannelZebraBtPrinter();
-  const MethodChannel channel = MethodChannel('zebra_bt_printer');
+  const MethodChannel channel = MethodChannel(PluginChannel.name);
 
   final List<MethodCall> log = <MethodCall>[];
 
@@ -36,12 +39,12 @@ void main() {
     );
 
     expect(result.isSuccess, isTrue);
-    expect(log.single.method, 'printImageBluetooth');
+    expect(log.single.method, PluginMethods.printImageBluetooth);
     final args = log.single.arguments as Map;
-    expect(args['mac'], 'AA:BB:CC:DD:EE:FF');
-    expect(args['imageBase64'], 'AAAA');
-    expect(args['labelWidthDots'], 800);
-    expect(args['labelHeightDots'], 400);
+    expect(args[PluginArguments.mac], 'AA:BB:CC:DD:EE:FF');
+    expect(args[PluginArguments.imageBase64], 'AAAA');
+    expect(args[PluginArguments.labelWidthDots], 800);
+    expect(args[PluginArguments.labelHeightDots], 400);
   });
 
   test('PlatformException is mapped to PrintResult.failure', () async {
