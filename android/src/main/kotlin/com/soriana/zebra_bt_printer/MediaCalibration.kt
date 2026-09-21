@@ -157,6 +157,7 @@ internal object MediaCalibrationSupport {
                         PluginDiagnosticMessages.calibrationIdleTimeout(deadlineMs),
                     )
                 },
+                requireObservedBusy = options.runSensorCalibration,
             )
 
             val snapshot = readSnapshot(conn)
