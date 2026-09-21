@@ -41,7 +41,7 @@ dependencies:
   zebra_bt_printer:
     git:
       url: https://github.com/OsmarM/zebra_bt_printer.git
-      ref: v1.4.0        # fija un tag/commit para builds reproducibles
+      ref: v1.6.1        # fija un tag/commit para builds reproducibles (no usar v1.6.0)
 ```
 
 Alternativa local / monorepo:
@@ -285,7 +285,10 @@ Cuando el operador carga un rollo de **diferente tamaño o tipo** debe calibrar
 la impresora (o sincronizar el perfil en NVM) **una vez** antes de imprimir con
 el nuevo `PrinterConfig`.
 
-### Recomendado — `calibrateMedia` (v1.6+)
+### Recomendado — `calibrateMedia` (v1.6.1+)
+
+> **Versión mínima:** usa el tag **`v1.6.1`** o superior. El tag `v1.6.0` no
+> compila en Android (referencia Kotlin incorrecta a `toolsUtil`).
 
 Sincroniza SGD (`media.*`, `ezpl.print_width`), calibra el sensor vía SDK
 (o fallback ZPL), espera fin por status y valida `zpl.label_length` contra el

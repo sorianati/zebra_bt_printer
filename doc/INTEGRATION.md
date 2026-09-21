@@ -39,7 +39,7 @@ dependencies:
   zebra_bt_printer:
     git:
       url: https://github.com/OsmarM/zebra_bt_printer.git
-      ref: v1.4.0        # pin to a tag/commit for reproducible builds
+      ref: v1.6.1        # pin to a tag/commit (do not use v1.6.0 on Android)
 ```
 
 Local / monorepo alternative:
@@ -280,6 +280,9 @@ When the operator loads a **different roll size or media type**, run
 printing with the new `PrinterConfig`.
 
 See [DISENO_CALIBRACION_MEDIA.md](DISENO_CALIBRACION_MEDIA.md) for the full design.
+
+> **Minimum version:** use tag **`v1.6.1`** or newer. Tag `v1.6.0` does not compile
+> on Android.
 
 ```dart
 final cal = await ZebraBtPrinter.calibrateMedia(
