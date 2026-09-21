@@ -1,3 +1,9 @@
+## 1.6.2
+
+* Android: calibration waits until the printer reports busy before accepting
+  idle, so `zpl.label_length` is not read too early after 12up→24up sensor cal
+  (avoids false `LABEL_LENGTH_MISMATCH` on the first attempt).
+
 ## 1.6.1
 
 * Android: fix Kotlin compile error — call `ZebraPrinter.calibrate()` (SDK
