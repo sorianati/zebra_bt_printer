@@ -8,6 +8,7 @@ import com.soriana.zebra_bt_printer.bridge.PluginArguments
 import com.soriana.zebra_bt_printer.bridge.PluginDiagnosticMessages
 import com.soriana.zebra_bt_printer.bridge.PluginResultKeys
 import com.soriana.zebra_bt_printer.bridge.PrinterStatusWaiter
+import com.soriana.zebra_bt_printer.bridge.PrinterTiming
 import com.soriana.zebra_bt_printer.bridge.LabelDefaults
 import com.soriana.zebra_bt_printer.zebra.MediaSenseValues
 import com.soriana.zebra_bt_printer.zebra.MediaTypeValues
@@ -148,56 +149,48 @@ internal object MediaCalibrationSupport {
                 conn.write(ZebraZplCommands.SAVE_TO_NVM.toByteArray(Charsets.UTF_8))
             }
 
-            PrinterStatusWaiter.awaitIdle(
-                conn = conn,
-                deadlineMs = options.timeoutMs,
-                paperOutMessage = PluginDiagnosticMessages.PAPER_OUT_DURING_CALIBRATION,
-                timeoutException = { deadlineMs, _ ->
-                    CalibrateTimeoutException(
-                        PluginDiagnosticMessages.calibrationIdleTimeout(deadlineMs),
-                    )
-                },
-                requireObservedBusy = options.runSensorCalibration,
-            )
-
-            val snapshot = readSnapshot(conn)
-            var appliedWidth = snapshot.printWidthDots
-            if (profile != null && options.applyPersistentSettings) {
-                appliedWidth = profile.printWidthDots
+            val appliedWidth = when {
+                profile != null && options.applyPersistentSettings -> profile.printWidthDots
+                else -> readSnapshot(conn).printWidthDots
             }
 
-            if (profile != null && options.runSensorCalibration) {
-                val detected = snapshot.labelLengthDots
-                if (detected == null) {
-                    return failure(
-                        NativeErrorCodes.CALIBRATE_ERROR,
-                        PluginDiagnosticMessages.LABEL_LENGTH_READ_FAILED,
-                        startedAt,
-                        detected,
-                        appliedWidth,
+            val detectedLength = when {
+                profile != null && options.runSensorCalibration -> {
+                    pollUntilLabelLengthMatches(
+                        conn = conn,
+                        profile = profile,
+                        toleranceDots = options.labelLengthToleranceDots,
+                        deadlineMs = options.timeoutMs,
                     )
                 }
-                val delta = kotlin.math.abs(detected - profile.labelLengthDots)
-                if (delta > options.labelLengthToleranceDots) {
-                    return failure(
-                        NativeErrorCodes.LABEL_LENGTH_MISMATCH,
-                        PluginDiagnosticMessages.labelLengthMismatch(
-                            detected,
-                            profile.labelLengthDots,
-                            options.labelLengthToleranceDots,
-                        ),
-                        startedAt,
-                        detected,
-                        appliedWidth,
+                else -> {
+                    PrinterStatusWaiter.awaitIdle(
+                        conn = conn,
+                        deadlineMs = options.timeoutMs,
+                        paperOutMessage = PluginDiagnosticMessages.PAPER_OUT_DURING_CALIBRATION,
+                        timeoutException = { deadlineMs, _ ->
+                            CalibrateTimeoutException(
+                                PluginDiagnosticMessages.calibrationIdleTimeout(deadlineMs),
+                            )
+                        },
                     )
+                    readSnapshot(conn).labelLengthDots
                 }
             }
 
             return MediaCalibrationOutcome(
                 isSuccess = true,
-                detectedLabelLengthDots = snapshot.labelLengthDots,
+                detectedLabelLengthDots = detectedLength,
                 appliedPrintWidthDots = appliedWidth,
                 elapsedMs = System.currentTimeMillis() - startedAt,
+            )
+        } catch (e: LabelLengthMismatchException) {
+            return failure(
+                NativeErrorCodes.LABEL_LENGTH_MISMATCH,
+                e.message,
+                startedAt,
+                e.detectedDots,
+                options.profile?.printWidthDots,
             )
         } catch (e: CalibrateTimeoutException) {
             return failure(NativeErrorCodes.CALIBRATE_TIMEOUT, e.message, startedAt)
@@ -237,6 +230,72 @@ internal object MediaCalibrationSupport {
             throw PaperOutException(PluginDiagnosticMessages.PAPER_OUT_PRE_CHECK)
         }
     }
+
+    /**
+     * Tras calibrar sensor, muchas ZQ no marcan "ocupada" en status; en su lugar se
+     * hace poll de [ZebraSgdKeys.ZPL_LABEL_LENGTH] hasta coincidir con el perfil.
+     */
+    private fun pollUntilLabelLengthMatches(
+        conn: Connection,
+        profile: MediaCalibrationProfileParsed,
+        toleranceDots: Int,
+        deadlineMs: Long,
+    ): Int {
+        val deadlineAt = System.currentTimeMillis() + deadlineMs
+        var lastDetected: Int? = null
+
+        while (System.currentTimeMillis() < deadlineAt) {
+            ensurePaperLoaded(conn)
+            lastDetected = sgdGetInt(conn, ZebraSgdKeys.ZPL_LABEL_LENGTH)
+            if (lastDetected != null) {
+                val delta = kotlin.math.abs(lastDetected - profile.labelLengthDots)
+                if (delta <= toleranceDots) {
+                    val remaining = deadlineAt - System.currentTimeMillis()
+                    if (remaining > 0) {
+                        try {
+                            PrinterStatusWaiter.awaitIdle(
+                                conn = conn,
+                                deadlineMs = minOf(
+                                    remaining,
+                                    CalibrationDefaults.POST_LENGTH_MATCH_IDLE_CAP_MS,
+                                ),
+                                paperOutMessage =
+                                    PluginDiagnosticMessages.PAPER_OUT_DURING_CALIBRATION,
+                                timeoutException = { ms, _ ->
+                                    CalibrateTimeoutException(
+                                        PluginDiagnosticMessages.calibrationIdleTimeout(ms),
+                                    )
+                                },
+                            )
+                        } catch (_: CalibrateTimeoutException) {
+                            // Longitud ya válida; algunas unidades siguen "busy" en status.
+                        }
+                    }
+                    return lastDetected
+                }
+            }
+            Thread.sleep(PrinterTiming.STATUS_POLL_INTERVAL_MS)
+        }
+
+        if (lastDetected == null) {
+            throw CalibrateTimeoutException(
+                PluginDiagnosticMessages.LABEL_LENGTH_READ_FAILED,
+            )
+        }
+        throw LabelLengthMismatchException(
+            PluginDiagnosticMessages.labelLengthMismatch(
+                lastDetected,
+                profile.labelLengthDots,
+                toleranceDots,
+            ),
+            lastDetected,
+        )
+    }
+
+    private class LabelLengthMismatchException(
+        message: String,
+        val detectedDots: Int,
+    ) : Exception(message)
 
     private fun sgdGetString(conn: Connection, key: String): String? {
         return try {

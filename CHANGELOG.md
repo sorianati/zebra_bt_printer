@@ -1,8 +1,15 @@
+## 1.6.3
+
+* Android: after sensor calibration, poll `zpl.label_length` until it matches the
+  profile (instead of requiring a busy flag in printer status, which caused
+  45s `CALIBRATE_TIMEOUT` on some mobile Zebra models).
+
 ## 1.6.2
 
 * Android: calibration waits until the printer reports busy before accepting
   idle, so `zpl.label_length` is not read too early after 12up→24up sensor cal
-  (avoids false `LABEL_LENGTH_MISMATCH` on the first attempt).
+  (avoids false `LABEL_LENGTH_MISMATCH` on the first attempt). Superseded by
+  1.6.3 polling approach.
 
 ## 1.6.1
 
