@@ -2,6 +2,8 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'src/models/calibrate_media_options.dart';
 import 'src/models/calibrate_media_result.dart';
+import 'src/models/ensure_media_ready_options.dart';
+import 'src/models/ensure_media_ready_result.dart';
 import 'src/models/print_result.dart';
 import 'src/models/printer_config.dart';
 import 'src/models/printer_media_snapshot.dart';
@@ -10,6 +12,8 @@ import 'zebra_bt_printer_method_channel.dart';
 export 'src/models/calibrate_media_error_code.dart';
 export 'src/models/calibrate_media_options.dart';
 export 'src/models/calibrate_media_result.dart';
+export 'src/models/ensure_media_ready_options.dart';
+export 'src/models/ensure_media_ready_result.dart';
 export 'src/models/media_calibration_profile.dart';
 export 'src/models/print_error_code.dart';
 export 'src/models/print_result.dart';
@@ -95,6 +99,16 @@ abstract class ZebraBtPrinterPlatform extends PlatformInterface {
     CalibrateMediaOptions options = const CalibrateMediaOptions(),
   }) {
     throw UnimplementedError('calibrateMedia() has not been implemented.');
+  }
+
+  /// Prepara la impresora para un perfil sin recalibrar si el snapshot ya coincide.
+  Future<EnsureMediaReadyResult> ensureMediaReadyForProfile({
+    required String mac,
+    required EnsureMediaReadyOptions options,
+  }) {
+    throw UnimplementedError(
+      'ensureMediaReadyForProfile() has not been implemented.',
+    );
   }
 
   /// Lectura de SGD de media (`zpl.label_length`, `ezpl.print_width`, etc.).

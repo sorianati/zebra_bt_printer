@@ -1,3 +1,11 @@
+## 1.7.0
+
+* Added `ZebraBtPrinter.ensureMediaReadyForProfile` with `EnsureMediaReadyOptions`
+  and `EnsureMediaReadyResult` (`skipped`, `settingsApplied`, `sensorCalibrated`).
+* Android: reads media snapshot before running sensor calibration; skips work when
+  SGD and `zpl.label_length` already match the profile.
+* Default `closeConnectionAfter: false` on ensure (keeps BT session for print).
+
 ## 1.6.3
 
 * Android: after sensor calibration, poll `zpl.label_length` until it matches the

@@ -57,4 +57,47 @@ class MediaCalibrationSupportTest {
         assertTrue(options.runSensorCalibration)
         assertEquals(CalibrationDefaults.DEFAULT_TIMEOUT_MS, options.timeoutMs)
     }
+
+    @Test
+    fun profileMatchesSnapshot_whenSgdAndLengthAlign() {
+        val profile = MediaCalibrationProfileParsed(
+            printWidthDots = 600,
+            labelLengthDots = 250,
+            mediaSense = MediaSenseValues.BAR,
+            mediaType = MediaTypeValues.LABEL,
+            maxLabelLengthDots = null,
+        )
+        val snapshot = MediaSnapshotParsed(
+            labelLengthDots = 248,
+            printWidthDots = 600,
+            mediaType = MediaTypeValues.LABEL,
+            mediaSenseMode = MediaSenseValues.BAR,
+        )
+
+        assertTrue(
+            MediaCalibrationSupport.profileMatchesSnapshot(snapshot, profile, 25),
+        )
+    }
+
+    @Test
+    fun profileMatchesSnapshot_falseWhenWidthDiffers() {
+        val profile = MediaCalibrationProfileParsed(
+            printWidthDots = 575,
+            labelLengthDots = 565,
+            mediaSense = MediaSenseValues.BAR,
+            mediaType = MediaTypeValues.LABEL,
+            maxLabelLengthDots = null,
+        )
+        val snapshot = MediaSnapshotParsed(
+            labelLengthDots = 565,
+            printWidthDots = 600,
+            mediaType = MediaTypeValues.LABEL,
+            mediaSenseMode = MediaSenseValues.BAR,
+        )
+
+        assertEquals(
+            false,
+            MediaCalibrationSupport.profileMatchesSnapshot(snapshot, profile, 25),
+        )
+    }
 }

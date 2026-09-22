@@ -43,6 +43,9 @@ internal data class MediaCalibrationOutcome(
     val detectedLabelLengthDots: Int? = null,
     val appliedPrintWidthDots: Int? = null,
     val elapsedMs: Long = 0,
+    val skipped: Boolean = false,
+    val settingsApplied: Boolean = false,
+    val sensorCalibrated: Boolean = false,
 ) {
     fun toResultMap(): Map<String, Any?> = mapOf(
         PluginResultKeys.IS_SUCCESS to isSuccess,
@@ -51,8 +54,19 @@ internal data class MediaCalibrationOutcome(
         PluginResultKeys.DETECTED_LABEL_LENGTH_DOTS to detectedLabelLengthDots,
         PluginResultKeys.APPLIED_PRINT_WIDTH_DOTS to appliedPrintWidthDots,
         PluginResultKeys.ELAPSED_MS to elapsedMs,
+        PluginResultKeys.SKIPPED to skipped,
+        PluginResultKeys.SETTINGS_APPLIED to settingsApplied,
+        PluginResultKeys.SENSOR_CALIBRATED to sensorCalibrated,
     )
 }
+
+internal data class EnsureMediaReadyOptionsParsed(
+    val profile: MediaCalibrationProfileParsed,
+    val forceSensorCalibration: Boolean,
+    val saveSettingsToNvm: Boolean,
+    val timeoutMs: Long,
+    val labelLengthToleranceDots: Int,
+)
 
 internal data class MediaSnapshotParsed(
     val labelLengthDots: Int?,
@@ -125,6 +139,122 @@ internal object MediaCalibrationSupport {
             mediaType = sgdGetString(conn, ZebraSgdKeys.MEDIA_TYPE),
             mediaSenseMode = sgdGetString(conn, ZebraSgdKeys.MEDIA_SENSE_MODE),
         )
+    }
+
+    fun parseEnsureOptions(call: MethodCall): EnsureMediaReadyOptionsParsed {
+        val base = parseOptions(call)
+        val profile = base.profile
+            ?: throw IllegalArgumentException(PluginDiagnosticMessages.PROFILE_REQUIRED)
+        return EnsureMediaReadyOptionsParsed(
+            profile = profile,
+            forceSensorCalibration =
+                call.argument<Boolean>(PluginArguments.FORCE_SENSOR_CALIBRATION) ?: false,
+            saveSettingsToNvm = base.saveSettingsToNvm,
+            timeoutMs = base.timeoutMs,
+            labelLengthToleranceDots = base.labelLengthToleranceDots,
+        )
+    }
+
+    fun ensureMediaReady(
+        conn: Connection,
+        options: EnsureMediaReadyOptionsParsed,
+    ): MediaCalibrationOutcome {
+        val startedAt = System.currentTimeMillis()
+        val profile = options.profile
+
+        try {
+            ensurePaperLoaded(conn)
+            val snapshot = readSnapshot(conn)
+
+            if (
+                !options.forceSensorCalibration &&
+                profileMatchesSnapshot(
+                    snapshot,
+                    profile,
+                    options.labelLengthToleranceDots,
+                )
+            ) {
+                return MediaCalibrationOutcome(
+                    isSuccess = true,
+                    skipped = true,
+                    detectedLabelLengthDots = snapshot.labelLengthDots,
+                    appliedPrintWidthDots = snapshot.printWidthDots,
+                    elapsedMs = System.currentTimeMillis() - startedAt,
+                )
+            }
+
+            val needsSgd = !persistentSettingsMatch(snapshot, profile)
+            val lengthOk = labelLengthWithinTolerance(
+                snapshot.labelLengthDots,
+                profile.labelLengthDots,
+                options.labelLengthToleranceDots,
+            )
+            val runSensor = options.forceSensorCalibration || !lengthOk
+
+            val calOptions = MediaCalibrationOptionsParsed(
+                profile = profile,
+                applyPersistentSettings = needsSgd || runSensor,
+                runSensorCalibration = runSensor,
+                saveSettingsToNvm = options.saveSettingsToNvm && (needsSgd || runSensor),
+                timeoutMs = options.timeoutMs,
+                labelLengthToleranceDots = options.labelLengthToleranceDots,
+            )
+            val outcome = execute(conn, calOptions)
+            if (!outcome.isSuccess) {
+                return outcome
+            }
+            return outcome.copy(
+                skipped = false,
+                settingsApplied = needsSgd || calOptions.applyPersistentSettings,
+                sensorCalibrated = runSensor,
+            )
+        } catch (e: Exception) {
+            return failure(
+                NativeErrorCodes.CALIBRATE_ERROR,
+                e.message ?: e.toString(),
+                startedAt,
+            )
+        }
+    }
+
+    internal fun profileMatchesSnapshot(
+        snapshot: MediaSnapshotParsed,
+        profile: MediaCalibrationProfileParsed,
+        toleranceDots: Int,
+    ): Boolean {
+        return persistentSettingsMatch(snapshot, profile) &&
+            labelLengthWithinTolerance(
+                snapshot.labelLengthDots,
+                profile.labelLengthDots,
+                toleranceDots,
+            )
+    }
+
+    internal fun persistentSettingsMatch(
+        snapshot: MediaSnapshotParsed,
+        profile: MediaCalibrationProfileParsed,
+    ): Boolean {
+        if (snapshot.printWidthDots != profile.printWidthDots) {
+            return false
+        }
+        if (!sgdValueEquals(snapshot.mediaType, profile.mediaType)) {
+            return false
+        }
+        return sgdValueEquals(snapshot.mediaSenseMode, profile.mediaSense)
+    }
+
+    internal fun labelLengthWithinTolerance(
+        detected: Int?,
+        expected: Int,
+        toleranceDots: Int,
+    ): Boolean {
+        if (detected == null) return false
+        return kotlin.math.abs(detected - expected) <= toleranceDots
+    }
+
+    private fun sgdValueEquals(actual: String?, expected: String): Boolean {
+        if (actual == null) return false
+        return actual.trim().equals(expected.trim(), ignoreCase = true)
     }
 
     fun execute(

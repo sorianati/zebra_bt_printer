@@ -9,6 +9,7 @@ internal object PluginMethods {
     const val DISCONNECT_BLUETOOTH = "disconnectBluetooth"
     const val CALIBRATE_PRINTER = "calibratePrinter"
     const val CALIBRATE_MEDIA = "calibrateMedia"
+    const val ENSURE_MEDIA_READY_FOR_PROFILE = "ensureMediaReadyForProfile"
     const val GET_MEDIA_SNAPSHOT = "getMediaSnapshot"
     const val PRINT_IMAGE_BLUETOOTH = "printImageBluetooth"
     const val PRINT_IMAGE_IP = "printImageIP"
@@ -43,6 +44,7 @@ internal object PluginArguments {
     const val TIMEOUT_MS = "timeoutMs"
     const val LABEL_LENGTH_TOLERANCE_DOTS = "labelLengthToleranceDots"
     const val CLOSE_CONNECTION_AFTER = "closeConnectionAfter"
+    const val FORCE_SENSOR_CALIBRATION = "forceSensorCalibration"
 }
 
 internal object PluginResultKeys {
@@ -52,6 +54,9 @@ internal object PluginResultKeys {
     const val DETECTED_LABEL_LENGTH_DOTS = "detectedLabelLengthDots"
     const val APPLIED_PRINT_WIDTH_DOTS = "appliedPrintWidthDots"
     const val ELAPSED_MS = "elapsedMs"
+    const val SKIPPED = "skipped"
+    const val SETTINGS_APPLIED = "settingsApplied"
+    const val SENSOR_CALIBRATED = "sensorCalibrated"
 
     const val LABEL_LENGTH_DOTS = "labelLengthDots"
     const val PRINT_WIDTH_DOTS = "printWidthDots"

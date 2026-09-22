@@ -6,6 +6,7 @@ abstract final class PluginMethods {
   static const disconnectBluetooth = 'disconnectBluetooth';
   static const calibratePrinter = 'calibratePrinter';
   static const calibrateMedia = 'calibrateMedia';
+  static const ensureMediaReadyForProfile = 'ensureMediaReadyForProfile';
   static const getMediaSnapshot = 'getMediaSnapshot';
   static const printImageBluetooth = 'printImageBluetooth';
   static const printImageIP = 'printImageIP';
