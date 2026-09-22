@@ -124,6 +124,8 @@ class ZebraBtPrinterPlugin :
             PluginMethods.DISCONNECT_BLUETOOTH -> handleDisconnectBluetooth(call, result)
             PluginMethods.CALIBRATE_PRINTER -> handleCalibratePrinter(call, result)
             PluginMethods.CALIBRATE_MEDIA -> handleCalibrateMedia(call, result)
+            PluginMethods.ENSURE_MEDIA_READY_FOR_PROFILE ->
+                handleEnsureMediaReadyForProfile(call, result)
             PluginMethods.GET_MEDIA_SNAPSHOT -> handleGetMediaSnapshot(call, result)
             PluginMethods.PRINT_IMAGE_BLUETOOTH -> handlePrintImageBluetooth(call, result)
             PluginMethods.PRINT_IMAGE_IP -> handlePrintImageIP(call, result)
@@ -220,6 +222,45 @@ class ZebraBtPrinterPlugin :
                     }
                 }
                 runOnUiThread(result) { it.success(outcome.toResultMap()) }
+            } catch (e: Exception) {
+                val code = if (e is java.io.IOException || e.message?.contains("connect", true) == true) {
+                    NativeErrorCodes.CONNECT_ERROR
+                } else {
+                    NativeErrorCodes.CALIBRATE_ERROR
+                }
+                runOnUiThread(result) { it.error(code, e.message, null) }
+            }
+        }
+    }
+
+    private fun handleEnsureMediaReadyForProfile(call: MethodCall, result: Result) {
+        val mac = call.argument<String>(PluginArguments.MAC)
+            ?: return invalidArgs(result, PluginDiagnosticMessages.MAC_REQUIRED)
+        if (!hasBluetoothPermissions()) {
+            return result.error(
+                NativeErrorCodes.PERMISSION_DENIED,
+                PluginDiagnosticMessages.BLUETOOTH_PERMISSIONS_CALIBRATE,
+                null,
+            )
+        }
+        val closeAfter = call.argument<Boolean>(PluginArguments.CLOSE_CONNECTION_AFTER) ?: false
+        runInBackground {
+            try {
+                val conn = getOrOpenConnection(mac)
+                val options = MediaCalibrationSupport.parseEnsureOptions(call)
+                val outcome = MediaCalibrationSupport.ensureMediaReady(conn, options)
+                if (closeAfter) {
+                    synchronized(persistentConnections) {
+                        if (persistentConnections.remove(mac) != null) {
+                            safeClose(conn)
+                        }
+                    }
+                }
+                runOnUiThread(result) { it.success(outcome.toResultMap()) }
+            } catch (e: IllegalArgumentException) {
+                runOnUiThread(result) {
+                    it.error(NativeErrorCodes.INVALID_ARGS, e.message, null)
+                }
             } catch (e: Exception) {
                 val code = if (e is java.io.IOException || e.message?.contains("connect", true) == true) {
                     NativeErrorCodes.CONNECT_ERROR

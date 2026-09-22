@@ -27,4 +27,5 @@ abstract final class PluginArguments {
   static const timeoutMs = 'timeoutMs';
   static const labelLengthToleranceDots = 'labelLengthToleranceDots';
   static const closeConnectionAfter = 'closeConnectionAfter';
+  static const forceSensorCalibration = 'forceSensorCalibration';
 }

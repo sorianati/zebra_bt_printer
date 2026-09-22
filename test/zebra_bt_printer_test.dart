@@ -83,6 +83,16 @@ class MockZebraBtPrinterPlatform
   }
 
   @override
+  Future<EnsureMediaReadyResult> ensureMediaReadyForProfile({
+    required String mac,
+    required EnsureMediaReadyOptions options,
+  }) async {
+    lastMethod = 'ensureMediaReadyForProfile';
+    lastArgs = {'mac': mac, 'options': options};
+    return const EnsureMediaReadyResult.success(skipped: true);
+  }
+
+  @override
   Future<PrinterMediaSnapshot?> getMediaSnapshot({required String mac}) async {
     lastMethod = 'getMediaSnapshot';
     lastArgs = {'mac': mac};

@@ -10,6 +10,8 @@ import 'src/bridge/print_limits.dart';
 import 'src/models/calibrate_media_error_code.dart';
 import 'src/models/calibrate_media_options.dart';
 import 'src/models/calibrate_media_result.dart';
+import 'src/models/ensure_media_ready_options.dart';
+import 'src/models/ensure_media_ready_result.dart';
 import 'src/models/print_error_code.dart';
 import 'src/models/print_result.dart';
 import 'src/models/printer_config.dart';
@@ -147,6 +149,35 @@ class MethodChannelZebraBtPrinter extends ZebraBtPrinterPlatform {
       return CalibrateMediaResult.fromNativeMap(map);
     } on PlatformException catch (e) {
       return CalibrateMediaResult.failure(
+        errorCode: CalibrateMediaErrorCode.fromNative(e.code),
+        errorMessage: e.message,
+        rawErrorCode: e.code,
+      );
+    }
+  }
+
+  @override
+  Future<EnsureMediaReadyResult> ensureMediaReadyForProfile({
+    required String mac,
+    required EnsureMediaReadyOptions options,
+  }) async {
+    try {
+      final map = await methodChannel.invokeMethod<Map<dynamic, dynamic>>(
+        PluginMethods.ensureMediaReadyForProfile,
+        {
+          PluginArguments.mac: mac,
+          ...options.toMap(),
+        },
+      );
+      if (map == null) {
+        return EnsureMediaReadyResult.failure(
+          errorCode: CalibrateMediaErrorCode.unknown,
+          errorMessage: PluginClientMessages.emptyNativeCalibrationResponse,
+        );
+      }
+      return EnsureMediaReadyResult.fromNativeMap(map);
+    } on PlatformException catch (e) {
+      return EnsureMediaReadyResult.failure(
         errorCode: CalibrateMediaErrorCode.fromNative(e.code),
         errorMessage: e.message,
         rawErrorCode: e.code,

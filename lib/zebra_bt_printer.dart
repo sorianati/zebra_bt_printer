@@ -3,6 +3,8 @@ library zebra_bt_printer;
 export 'src/models/calibrate_media_error_code.dart';
 export 'src/models/calibrate_media_options.dart';
 export 'src/models/calibrate_media_result.dart';
+export 'src/models/ensure_media_ready_options.dart';
+export 'src/models/ensure_media_ready_result.dart';
 export 'src/models/media_calibration_profile.dart';
 export 'src/models/print_error_code.dart';
 export 'src/models/print_result.dart';
@@ -14,6 +16,8 @@ export 'zebra_bt_printer_platform_interface.dart'
 
 import 'src/models/calibrate_media_options.dart';
 import 'src/models/calibrate_media_result.dart';
+import 'src/models/ensure_media_ready_options.dart';
+import 'src/models/ensure_media_ready_result.dart';
 import 'src/models/print_result.dart';
 import 'src/models/printer_config.dart';
 import 'src/models/printer_media_snapshot.dart';
@@ -150,5 +154,19 @@ class ZebraBtPrinter {
     required String mac,
   }) {
     return ZebraBtPrinterPlatform.instance.getMediaSnapshot(mac: mac);
+  }
+
+  /// Prepara media para [options.profile] leyendo SGD antes de calibrar sensor.
+  ///
+  /// Por defecto deja la conexión BT abierta (`closeConnectionAfter: false`)
+  /// para encadenar una impresión sin reconectar.
+  static Future<EnsureMediaReadyResult> ensureMediaReadyForProfile({
+    required String mac,
+    required EnsureMediaReadyOptions options,
+  }) {
+    return ZebraBtPrinterPlatform.instance.ensureMediaReadyForProfile(
+      mac: mac,
+      options: options,
+    );
   }
 }

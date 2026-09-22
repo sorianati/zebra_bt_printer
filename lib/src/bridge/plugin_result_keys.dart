@@ -8,6 +8,9 @@ abstract final class PluginResultKeys {
   static const detectedLabelLengthDots = 'detectedLabelLengthDots';
   static const appliedPrintWidthDots = 'appliedPrintWidthDots';
   static const elapsedMs = 'elapsedMs';
+  static const skipped = 'skipped';
+  static const settingsApplied = 'settingsApplied';
+  static const sensorCalibrated = 'sensorCalibrated';
 
   static const printWidthDots = 'printWidthDots';
   static const labelLengthDots = 'labelLengthDots';

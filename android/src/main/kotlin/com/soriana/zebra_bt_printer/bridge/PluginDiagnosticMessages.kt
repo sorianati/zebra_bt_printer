@@ -3,6 +3,7 @@ package com.soriana.zebra_bt_printer.bridge
 /** Mensajes técnicos para [MethodChannel.Result.error] / excepciones (no UI). */
 internal object PluginDiagnosticMessages {
     const val MAC_REQUIRED = "mac es requerido"
+    const val PROFILE_REQUIRED = "profile es requerido para ensureMediaReadyForProfile"
     const val IP_REQUIRED = "ip es requerido"
     const val IMAGE_BASE64_REQUIRED = "imageBase64 es requerido"
     const val ZPL_TEXT_REQUIRED = "zplText es requerido"
