@@ -15,8 +15,10 @@ import com.soriana.zebra_bt_printer.zebra.MediaTypeValues
 import com.soriana.zebra_bt_printer.zebra.ZebraSgdKeys
 import com.soriana.zebra_bt_printer.zebra.ZebraZplCommands
 import com.zebra.sdk.comm.Connection
+import com.zebra.sdk.printer.PrinterLanguage
 import com.zebra.sdk.printer.SGD
 import com.zebra.sdk.printer.ZebraPrinterFactory
+import com.zebra.sdk.printer.operations.internal.PrinterCalibrator
 import io.flutter.plugin.common.MethodCall
 
 internal data class MediaCalibrationProfileParsed(
@@ -83,6 +85,14 @@ internal data class MediaSnapshotParsed(
 }
 
 internal object MediaCalibrationSupport {
+    /** Antes de imprimir: solo espera; no dispara otra calibración. */
+    fun ensurePaperReady(conn: Connection) {
+        waitUntilPaperPresentOrThrow(
+            conn,
+            CalibrationDefaults.PAPER_PRESENT_WAIT_MS,
+        )
+    }
+
     fun legacyCalibrateOptions(): MediaCalibrationOptionsParsed =
         MediaCalibrationOptionsParsed(
             profile = null,
@@ -163,7 +173,6 @@ internal object MediaCalibrationSupport {
         val profile = options.profile
 
         try {
-            ensurePaperLoaded(conn)
             val snapshot = readSnapshot(conn)
 
             if (
@@ -208,6 +217,8 @@ internal object MediaCalibrationSupport {
                 settingsApplied = needsSgd || calOptions.applyPersistentSettings,
                 sensorCalibrated = runSensor,
             )
+        } catch (e: PaperOutException) {
+            return failure(NativeErrorCodes.PAPER_OUT, e.message, startedAt)
         } catch (e: Exception) {
             return failure(
                 NativeErrorCodes.CALIBRATE_ERROR,
@@ -264,8 +275,6 @@ internal object MediaCalibrationSupport {
         val startedAt = System.currentTimeMillis()
 
         try {
-            ensurePaperLoaded(conn)
-
             val profile = options.profile
             if (profile != null && options.applyPersistentSettings) {
                 applyPersistentProfile(conn, profile)
@@ -273,6 +282,7 @@ internal object MediaCalibrationSupport {
 
             if (options.runSensorCalibration) {
                 runSensorCalibration(conn)
+                Thread.sleep(CalibrationDefaults.POST_SENSOR_CALIBRATE_SETTLE_MS)
             }
 
             if (options.saveSettingsToNvm) {
@@ -294,16 +304,7 @@ internal object MediaCalibrationSupport {
                     )
                 }
                 else -> {
-                    PrinterStatusWaiter.awaitIdle(
-                        conn = conn,
-                        deadlineMs = options.timeoutMs,
-                        paperOutMessage = PluginDiagnosticMessages.PAPER_OUT_DURING_CALIBRATION,
-                        timeoutException = { deadlineMs, _ ->
-                            CalibrateTimeoutException(
-                                PluginDiagnosticMessages.calibrationIdleTimeout(deadlineMs),
-                            )
-                        },
-                    )
+                    awaitIdleAfterSensorOnlyCalibration(conn, options.timeoutMs)
                     readSnapshot(conn).labelLengthDots
                 }
             }
@@ -325,7 +326,7 @@ internal object MediaCalibrationSupport {
         } catch (e: CalibrateTimeoutException) {
             return failure(NativeErrorCodes.CALIBRATE_TIMEOUT, e.message, startedAt)
         } catch (e: PaperOutException) {
-            return failure(NativeErrorCodes.CALIBRATE_ERROR, e.message, startedAt)
+            return failure(NativeErrorCodes.PAPER_OUT, e.message, startedAt)
         } catch (e: Exception) {
             return failure(
                 NativeErrorCodes.CALIBRATE_ERROR,
@@ -345,20 +346,52 @@ internal object MediaCalibrationSupport {
     }
 
     private fun runSensorCalibration(conn: Connection) {
-        val printer = ZebraPrinterFactory.getInstance(conn)
         try {
-            // ZebraPrinter extends ToolsUtil in the Link-OS SDK (calibrate() on printer).
-            printer.calibrate()
-        } catch (_: Exception) {
-            conn.write(ZebraZplCommands.CALIBRATE_AND_SAVE.toByteArray(Charsets.UTF_8))
+            PrinterCalibrator(conn, PrinterLanguage.ZPL).execute()
+        } catch (_: Throwable) {
+            // Sin Jackson u otro fallo Link-OS → calibrate() / ZPL (~JC).
+            val printer = ZebraPrinterFactory.getInstance(conn)
+            try {
+                printer.calibrate()
+            } catch (_: Throwable) {
+                conn.write(ZebraZplCommands.CALIBRATE_AND_SAVE.toByteArray(Charsets.UTF_8))
+            }
         }
     }
 
-    private fun ensurePaperLoaded(conn: Connection) {
-        val status = ZebraPrinterFactory.getInstance(conn).currentStatus
-        if (status.isPaperOut) {
+    /** Calibración sin perfil: no fallar por isPaperOut/timeout transitorios tras ~JC. */
+    private fun awaitIdleAfterSensorOnlyCalibration(conn: Connection, deadlineMs: Long) {
+        try {
+            PrinterStatusWaiter.awaitIdle(
+                conn = conn,
+                deadlineMs = deadlineMs,
+                paperOutMessage = PluginDiagnosticMessages.PAPER_OUT_DURING_CALIBRATION,
+                timeoutException = { ms, _ ->
+                    CalibrateTimeoutException(
+                        PluginDiagnosticMessages.calibrationIdleTimeout(ms),
+                    )
+                },
+            )
+        } catch (_: PaperOutException) {
+        } catch (_: CalibrateTimeoutException) {
+        }
+    }
+
+    private fun waitUntilPaperPresentOrThrow(conn: Connection, deadlineMs: Long) {
+        val deadlineAt = System.currentTimeMillis() + deadlineMs
+        while (System.currentTimeMillis() < deadlineAt) {
+            if (!isPaperOut(conn)) {
+                return
+            }
+            Thread.sleep(PrinterTiming.STATUS_POLL_INTERVAL_MS)
+        }
+        if (isPaperOut(conn)) {
             throw PaperOutException(PluginDiagnosticMessages.PAPER_OUT_PRE_CHECK)
         }
+    }
+
+    private fun isPaperOut(conn: Connection): Boolean {
+        return ZebraPrinterFactory.getInstance(conn).currentStatus.isPaperOut
     }
 
     /**
@@ -375,7 +408,11 @@ internal object MediaCalibrationSupport {
         var lastDetected: Int? = null
 
         while (System.currentTimeMillis() < deadlineAt) {
-            ensurePaperLoaded(conn)
+            if (isPaperOut(conn)) {
+                // Transitorio mientras termina la única calibración; no repetir ~JC.
+                Thread.sleep(PrinterTiming.STATUS_POLL_INTERVAL_MS)
+                continue
+            }
             lastDetected = sgdGetInt(conn, ZebraSgdKeys.ZPL_LABEL_LENGTH)
             if (lastDetected != null) {
                 val delta = kotlin.math.abs(lastDetected - profile.labelLengthDots)
@@ -399,6 +436,8 @@ internal object MediaCalibrationSupport {
                             )
                         } catch (_: CalibrateTimeoutException) {
                             // Longitud ya válida; algunas unidades siguen "busy" en status.
+                        } catch (_: PaperOutException) {
+                            // Media aún indexando tras calibrar; longitud ya válida.
                         }
                     }
                     return lastDetected

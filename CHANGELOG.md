@@ -1,3 +1,32 @@
+## 1.7.5
+
+* Android: dependencia `jackson-databind` para `PrinterCalibrator` (evita crash
+  `NoClassDefFoundError: ObjectMapper` en la app host).
+* Fallback de calibración captura `Throwable` (p. ej. linkage) y usa SDK/ZPL.
+
+## 1.7.4
+
+* Android: calibración de sensor prioriza `PrinterCalibrator` (`zpl.calibrate` JSON).
+* Calibración sin perfil: no devuelve `PAPER_OUT`/`CALIBRATE_TIMEOUT` por estado
+  transitorio tras el sensor (equivalente a calibrar desde el menú de la Zebra).
+
+## 1.7.3
+
+* Android: eliminada recuperación que re-calibraba en bucle ante `isPaperOut`
+  (alimentaba papel sin imprimir). Tras una sola calibración se espera 2.5 s y
+  se hace poll de estado/longitud; antes de imprimir solo se espera hasta 12 s.
+
+## 1.7.2
+
+* Android: recuperación automática ante `isPaperOut` (revertida en 1.7.3).
+
+## 1.7.1
+
+* Calibración: `PaperOutException` devuelve `PAPER_OUT` (no `CALIBRATE_ERROR`).
+* `CalibrateMediaErrorCode.paperOut` con mensaje de tapa de compartimento.
+* Calibración 12up: `forceSensorCalibration` y tolerancia de longitud ampliada vía opciones en app.
+* Revertido experimento 605 dots (QA 24→12 adhesivo sin mejora).
+
 ## 1.7.0
 
 * Added `ZebraBtPrinter.ensureMediaReadyForProfile` with `EnsureMediaReadyOptions`

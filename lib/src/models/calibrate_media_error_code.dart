@@ -25,6 +25,11 @@ enum CalibrateMediaErrorCode {
     'La longitud detectada no coincide con el perfil esperado. '
         'Verifica el rollo o calibra manualmente.',
   ),
+  paperOut(
+    'PAPER_OUT',
+    'La impresora no detecta el rollo. Verifica que el adhesivo esté bien '
+        'cargado; si el error continúa, abre y cierra la tapa del compartimento.',
+  ),
   unsupportedPrinter(
     'UNSUPPORTED_PRINTER',
     'La impresora no soporta calibración por SDK; el intento alternativo falló.',
