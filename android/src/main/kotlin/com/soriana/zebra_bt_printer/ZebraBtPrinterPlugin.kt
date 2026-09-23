@@ -506,7 +506,7 @@ class ZebraBtPrinterPlugin :
         val closeable = persistent == null
 
         try {
-            ensurePaperLoaded(conn)
+            MediaCalibrationSupport.ensurePaperReady(conn)
 
             val source      = decodeBase64ToBitmap(imageBase64)
             val labelBitmap = createLabelBitmap(
@@ -550,7 +550,7 @@ class ZebraBtPrinterPlugin :
         conn.open()
 
         try {
-            ensurePaperLoaded(conn)
+            MediaCalibrationSupport.ensurePaperReady(conn)
 
             val source      = decodeBase64ToBitmap(imageBase64)
             val labelBitmap = createLabelBitmap(
@@ -581,26 +581,12 @@ class ZebraBtPrinterPlugin :
         val conn = BluetoothConnection(mac)
         conn.open()
         try {
-            ensurePaperLoaded(conn)
+            MediaCalibrationSupport.ensurePaperReady(conn)
             val printer = ZebraPrinterFactory.getInstance(conn)
             printer.sendCommand("^XA^FO50,50^ADN,36,20^FD$zplText^FS^XZ")
             awaitBatchSettled(conn, copies = 1)
         } finally {
             safeClose(conn)
-        }
-    }
-
-    /**
-     * Consulta el estado de la impresora y falla si reporta sin papel.
-     *
-     * Se usa antes de enviar ZPL. En algunas móviles, si la impresora ya está
-     * en error, [getCurrentStatus] puede lanzar ConnectionException en lugar de
-     * devolver isPaperOut=true — eso se propaga como PRINT_ERROR.
-     */
-    private fun ensurePaperLoaded(conn: Connection) {
-        val status = ZebraPrinterFactory.getInstance(conn).currentStatus
-        if (status.isPaperOut) {
-            throw PaperOutException(PluginDiagnosticMessages.PAPER_OUT_PRE_CHECK)
         }
     }
 

@@ -27,6 +27,12 @@ internal object CalibrationDefaults {
 
     /** Tras leer longitud OK, espera idle corta antes de devolver éxito. */
     const val POST_LENGTH_MATCH_IDLE_CAP_MS = 10_000L
+
+    /** Espera a que isPaperOut se aclare antes de imprimir (sin volver a calibrar). */
+    const val PAPER_PRESENT_WAIT_MS = 12_000L
+
+    /** Tras ~JC/SDK calibrate, la ZQ puede reportar sin papel mientras alimenta. */
+    const val POST_SENSOR_CALIBRATE_SETTLE_MS = 2_500L
 }
 
 internal object PrintLimits {
