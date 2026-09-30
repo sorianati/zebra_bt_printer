@@ -7,12 +7,14 @@ class PrinterMediaSnapshot {
     this.printWidthDots,
     this.mediaType,
     this.mediaSenseMode,
+    this.tearOffDots,
   });
 
   final int? labelLengthDots;
   final int? printWidthDots;
   final String? mediaType;
   final String? mediaSenseMode;
+  final int? tearOffDots;
 
   static PrinterMediaSnapshot? fromMap(Map<dynamic, dynamic>? map) {
     if (map == null) return null;
@@ -21,6 +23,7 @@ class PrinterMediaSnapshot {
       printWidthDots: map[PluginResultKeys.printWidthDots] as int?,
       mediaType: map[PluginResultKeys.mediaType] as String?,
       mediaSenseMode: map[PluginResultKeys.mediaSenseMode] as String?,
+      tearOffDots: map[PluginResultKeys.tearOffDots] as int?,
     );
   }
 }

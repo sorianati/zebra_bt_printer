@@ -523,7 +523,8 @@ class ZebraBtPrinterPlugin :
                 append("^PW${config.labelWidthDots}\n")
                 append("^LL${config.labelHeightDots}\n")
                 append("^ML${config.maxLabelLengthDots}\n")
-                if (config.labelTopOffset != 0) append("^LT${config.labelTopOffset}\n")
+                // Siempre fijar ^LT por job (incl. 0) para no heredar offset de un 12up anterior.
+                append("^LT${config.labelTopOffset}\n")
                 append("^FO0,0\n")
                 append(bitmapToZplGf(labelBitmap))
                 append("\n^XZ")
@@ -563,7 +564,7 @@ class ZebraBtPrinterPlugin :
                 append("^PW${config.labelWidthDots}\n")
                 append("^LL${config.labelHeightDots}\n")
                 append("^ML${config.maxLabelLengthDots}\n")
-                if (config.labelTopOffset != 0) append("^LT${config.labelTopOffset}\n")
+                append("^LT${config.labelTopOffset}\n")
                 append("^FO0,0\n")
                 append(bitmapToZplGf(labelBitmap))
                 append("\n^XZ")

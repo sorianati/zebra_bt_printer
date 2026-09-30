@@ -38,6 +38,7 @@ internal object PluginArguments {
     const val PRINT_WIDTH_DOTS = "printWidthDots"
     const val LABEL_LENGTH_DOTS = "labelLengthDots"
     const val MEDIA_SENSE = "mediaSense"
+    const val TEAR_OFF_DOTS = "tearOffDots"
     const val APPLY_PERSISTENT_SETTINGS = "applyPersistentSettings"
     const val RUN_SENSOR_CALIBRATION = "runSensorCalibration"
     const val SAVE_SETTINGS_TO_NVM = "saveSettingsToNvm"
@@ -62,6 +63,7 @@ internal object PluginResultKeys {
     const val PRINT_WIDTH_DOTS = "printWidthDots"
     const val MEDIA_TYPE = "mediaType"
     const val MEDIA_SENSE_MODE = "mediaSenseMode"
+    const val TEAR_OFF_DOTS = "tearOffDots"
 }
 
 internal object NativeErrorCodes {

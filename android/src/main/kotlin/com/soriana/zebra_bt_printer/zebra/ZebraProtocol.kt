@@ -6,6 +6,7 @@ internal object ZebraSgdKeys {
     const val MEDIA_TYPE = "media.type"
     const val MEDIA_SENSE_MODE = "media.sense_mode"
     const val EZPL_LABEL_LENGTH_MAX = "ezpl.label_length_max"
+    const val EZPL_TEAR_OFF = "ezpl.tear_off"
 }
 
 internal object ZebraZplCommands {

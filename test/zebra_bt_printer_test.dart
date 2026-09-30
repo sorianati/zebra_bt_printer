@@ -212,10 +212,12 @@ void main() {
         printWidthDots: 575,
         labelLengthDots: 565,
         mediaSense: MediaSenseMode.bar,
+        tearOffDots: 0,
       );
       final restored = MediaCalibrationProfile.fromMap(profile.toMap());
       expect(restored?.printWidthDots, 575);
       expect(restored?.mediaSense, MediaSenseMode.bar);
+      expect(restored?.tearOffDots, 0);
     });
   });
 

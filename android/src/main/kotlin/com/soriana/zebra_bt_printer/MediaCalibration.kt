@@ -27,10 +27,13 @@ internal data class MediaCalibrationProfileParsed(
     val mediaSense: String,
     val mediaType: String,
     val maxLabelLengthDots: Int?,
+    /** SGD `ezpl.tear_off`; null = no modificar en calibración. */
+    val tearOffDots: Int? = null,
 )
 
 internal data class MediaCalibrationOptionsParsed(
     val profile: MediaCalibrationProfileParsed?,
+    val standaloneTearOffDots: Int? = null,
     val applyPersistentSettings: Boolean,
     val runSensorCalibration: Boolean,
     val saveSettingsToNvm: Boolean,
@@ -75,12 +78,14 @@ internal data class MediaSnapshotParsed(
     val printWidthDots: Int?,
     val mediaType: String?,
     val mediaSenseMode: String?,
+    val tearOffDots: Int? = null,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         PluginResultKeys.LABEL_LENGTH_DOTS to labelLengthDots,
         PluginResultKeys.PRINT_WIDTH_DOTS to printWidthDots,
         PluginResultKeys.MEDIA_TYPE to mediaType,
         PluginResultKeys.MEDIA_SENSE_MODE to mediaSenseMode,
+        PluginResultKeys.TEAR_OFF_DOTS to tearOffDots,
     )
 }
 
@@ -96,6 +101,7 @@ internal object MediaCalibrationSupport {
     fun legacyCalibrateOptions(): MediaCalibrationOptionsParsed =
         MediaCalibrationOptionsParsed(
             profile = null,
+            standaloneTearOffDots = null,
             applyPersistentSettings = false,
             runSensorCalibration = true,
             saveSettingsToNvm = true,
@@ -120,12 +126,17 @@ internal object MediaCalibrationSupport {
                     mediaSense = sense,
                     mediaType = type,
                     maxLabelLengthDots = map[PluginArguments.MAX_LABEL_LENGTH_DOTS] as? Int,
+                    tearOffDots = map[PluginArguments.TEAR_OFF_DOTS] as? Int,
                 )
             }
         }
 
+        val standaloneTearOffDots =
+            if (profile == null) call.argument<Int>(PluginArguments.TEAR_OFF_DOTS) else null
+
         return MediaCalibrationOptionsParsed(
             profile = profile,
+            standaloneTearOffDots = standaloneTearOffDots,
             applyPersistentSettings =
                 call.argument<Boolean>(PluginArguments.APPLY_PERSISTENT_SETTINGS) ?: true,
             runSensorCalibration =
@@ -148,6 +159,7 @@ internal object MediaCalibrationSupport {
             printWidthDots = sgdGetInt(conn, ZebraSgdKeys.EZPL_PRINT_WIDTH),
             mediaType = sgdGetString(conn, ZebraSgdKeys.MEDIA_TYPE),
             mediaSenseMode = sgdGetString(conn, ZebraSgdKeys.MEDIA_SENSE_MODE),
+            tearOffDots = sgdGetInt(conn, ZebraSgdKeys.EZPL_TEAR_OFF),
         )
     }
 
@@ -251,7 +263,14 @@ internal object MediaCalibrationSupport {
         if (!sgdValueEquals(snapshot.mediaType, profile.mediaType)) {
             return false
         }
-        return sgdValueEquals(snapshot.mediaSenseMode, profile.mediaSense)
+        if (!sgdValueEquals(snapshot.mediaSenseMode, profile.mediaSense)) {
+            return false
+        }
+        val expectedTearOff = profile.tearOffDots
+        if (expectedTearOff != null && snapshot.tearOffDots != expectedTearOff) {
+            return false
+        }
+        return true
     }
 
     internal fun labelLengthWithinTolerance(
@@ -278,6 +297,12 @@ internal object MediaCalibrationSupport {
             val profile = options.profile
             if (profile != null && options.applyPersistentSettings) {
                 applyPersistentProfile(conn, profile)
+            } else if (
+                profile == null &&
+                options.applyPersistentSettings &&
+                options.standaloneTearOffDots != null
+            ) {
+                applyTearOffDots(conn, options.standaloneTearOffDots)
             }
 
             if (options.runSensorCalibration) {
@@ -343,6 +368,15 @@ internal object MediaCalibrationSupport {
         val maxLen = profile.maxLabelLengthDots
             ?: (profile.labelLengthDots * LabelDefaults.MAX_LABEL_LENGTH_MULTIPLIER)
         SGD.SET(ZebraSgdKeys.EZPL_LABEL_LENGTH_MAX, maxLen.toString(), conn)
+        profile.tearOffDots?.let { applyTearOffDots(conn, it) }
+    }
+
+    private fun applyTearOffDots(conn: Connection, tearOffDots: Int) {
+        val clamped = tearOffDots.coerceIn(
+            CalibrationDefaults.TEAR_OFF_MIN_DOTS,
+            CalibrationDefaults.TEAR_OFF_MAX_DOTS,
+        )
+        SGD.SET(ZebraSgdKeys.EZPL_TEAR_OFF, clamped.toString(), conn)
     }
 
     private fun runSensorCalibration(conn: Connection) {
