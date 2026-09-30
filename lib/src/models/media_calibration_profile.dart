@@ -22,6 +22,7 @@ class MediaCalibrationProfile {
     required this.mediaSense,
     this.mediaType = MediaType.label,
     this.maxLabelLengthDots,
+    this.tearOffDots,
   });
 
   /// Ancho de impresión persistente → SGD `ezpl.print_width`.
@@ -38,6 +39,9 @@ class MediaCalibrationProfile {
   /// Opcional → `ezpl.label_length_max` / alineación con ZPL `^ML`.
   final int? maxLabelLengthDots;
 
+  /// Posición de desgarre (menú Tear Off) → SGD `ezpl.tear_off`. Null = no cambiar.
+  final int? tearOffDots;
+
   Map<String, dynamic> toMap() => {
         PluginArguments.printWidthDots: printWidthDots,
         PluginArguments.labelLengthDots: labelLengthDots,
@@ -45,6 +49,7 @@ class MediaCalibrationProfile {
         PluginArguments.mediaType: mediaType.name,
         if (maxLabelLengthDots != null)
           PluginArguments.maxLabelLengthDots: maxLabelLengthDots,
+        if (tearOffDots != null) PluginArguments.tearOffDots: tearOffDots,
       };
 
   static MediaCalibrationProfile? fromMap(Map<dynamic, dynamic>? map) {
@@ -67,6 +72,7 @@ class MediaCalibrationProfile {
         orElse: () => MediaType.label,
       ),
       maxLabelLengthDots: map[PluginArguments.maxLabelLengthDots] as int?,
+      tearOffDots: map[PluginArguments.tearOffDots] as int?,
     );
   }
 }

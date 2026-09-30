@@ -21,6 +21,8 @@ abstract final class PluginArguments {
   static const printWidthDots = 'printWidthDots';
   static const labelLengthDots = 'labelLengthDots';
   static const mediaSense = 'mediaSense';
+  /// Ajuste de desgarre persistente (SGD `ezpl.tear_off`), en dots (-120…120).
+  static const tearOffDots = 'tearOffDots';
   static const applyPersistentSettings = 'applyPersistentSettings';
   static const runSensorCalibration = 'runSensorCalibration';
   static const saveSettingsToNvm = 'saveSettingsToNvm';

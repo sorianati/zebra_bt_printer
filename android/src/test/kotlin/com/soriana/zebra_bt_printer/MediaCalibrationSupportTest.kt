@@ -24,6 +24,7 @@ class MediaCalibrationSupportTest {
                     PluginArguments.LABEL_LENGTH_DOTS to 250,
                     PluginArguments.MEDIA_SENSE to MediaSenseValues.BAR,
                     PluginArguments.MEDIA_TYPE to MediaTypeValues.LABEL,
+                    PluginArguments.TEAR_OFF_DOTS to 25,
                 ),
                 PluginArguments.APPLY_PERSISTENT_SETTINGS to true,
                 PluginArguments.RUN_SENSOR_CALIBRATION to false,
@@ -39,6 +40,7 @@ class MediaCalibrationSupportTest {
         assertEquals(600, options.profile?.printWidthDots)
         assertEquals(250, options.profile?.labelLengthDots)
         assertEquals(MediaSenseValues.BAR, options.profile?.mediaSense)
+        assertEquals(25, options.profile?.tearOffDots)
         assertEquals(false, options.runSensorCalibration)
         assertEquals(30_000L, options.timeoutMs)
         assertEquals(25, options.labelLengthToleranceDots)
@@ -76,6 +78,30 @@ class MediaCalibrationSupportTest {
 
         assertTrue(
             MediaCalibrationSupport.profileMatchesSnapshot(snapshot, profile, 25),
+        )
+    }
+
+    @Test
+    fun persistentSettingsMatch_falseWhenTearOffDiffers() {
+        val profile = MediaCalibrationProfileParsed(
+            printWidthDots = 600,
+            labelLengthDots = 250,
+            mediaSense = MediaSenseValues.BAR,
+            mediaType = MediaTypeValues.LABEL,
+            maxLabelLengthDots = null,
+            tearOffDots = 25,
+        )
+        val snapshot = MediaSnapshotParsed(
+            labelLengthDots = 250,
+            printWidthDots = 600,
+            mediaType = MediaTypeValues.LABEL,
+            mediaSenseMode = MediaSenseValues.BAR,
+            tearOffDots = 0,
+        )
+
+        assertEquals(
+            false,
+            MediaCalibrationSupport.persistentSettingsMatch(snapshot, profile),
         )
     }
 

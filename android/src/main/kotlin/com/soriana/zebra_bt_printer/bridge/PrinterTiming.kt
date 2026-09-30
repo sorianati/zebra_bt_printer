@@ -33,6 +33,10 @@ internal object CalibrationDefaults {
 
     /** Tras ~JC/SDK calibrate, la ZQ puede reportar sin papel mientras alimenta. */
     const val POST_SENSOR_CALIBRATE_SETTLE_MS = 2_500L
+
+    /** Rango Zebra SGD [ezpl.tear_off](https://docs.zebra.com/us/en/printers/software/zpl-pg/c-sgd-printer-commands/r-sgd-ezpl-tear-off.html). */
+    const val TEAR_OFF_MIN_DOTS = -120
+    const val TEAR_OFF_MAX_DOTS = 120
 }
 
 internal object PrintLimits {

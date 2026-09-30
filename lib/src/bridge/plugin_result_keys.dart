@@ -16,4 +16,5 @@ abstract final class PluginResultKeys {
   static const labelLengthDots = 'labelLengthDots';
   static const mediaType = 'mediaType';
   static const mediaSenseMode = 'mediaSenseMode';
+  static const tearOffDots = 'tearOffDots';
 }

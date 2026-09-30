@@ -1,3 +1,11 @@
+## 1.7.6
+
+* `MediaCalibrationProfile.tearOffDots` → SGD `ezpl.tear_off` al aplicar perfil
+  (persistido con `^JUS` cuando `saveSettingsToNvm` es true).
+* Presets Fenicia: `fenicia24Up` tear off **13**, `fenicia12Up` tear off **0**.
+* `CalibrateMediaOptions.tearOffDots` sin perfil: solo SGD tear off + sensor (Fenicia 12up).
+* `getMediaSnapshot` incluye `tearOffDots`; `ensureMediaReady` compara tear off.
+
 ## 1.7.5
 
 * Android: dependencia `jackson-databind` para `PrinterCalibrator` (evita crash

@@ -6,6 +6,7 @@ import 'media_calibration_profile.dart';
 class CalibrateMediaOptions {
   const CalibrateMediaOptions({
     this.profile,
+    this.tearOffDots,
     this.applyPersistentSettings = true,
     this.runSensorCalibration = true,
     this.saveSettingsToNvm = true,
@@ -16,6 +17,9 @@ class CalibrateMediaOptions {
 
   /// Si null, solo calibración de sensor sin cambiar SGD (legacy mejorado).
   final MediaCalibrationProfile? profile;
+
+  /// Sin [profile]: escribe solo `ezpl.tear_off` antes del sensor (p. ej. 12up = 0).
+  final int? tearOffDots;
 
   final bool applyPersistentSettings;
   final bool runSensorCalibration;
@@ -28,6 +32,8 @@ class CalibrateMediaOptions {
 
   Map<String, dynamic> toMap() => {
         if (profile != null) PluginArguments.profile: profile!.toMap(),
+        if (profile == null && tearOffDots != null)
+          PluginArguments.tearOffDots: tearOffDots,
         PluginArguments.applyPersistentSettings: applyPersistentSettings,
         PluginArguments.runSensorCalibration: runSensorCalibration,
         PluginArguments.saveSettingsToNvm: saveSettingsToNvm,
