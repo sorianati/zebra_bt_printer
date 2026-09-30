@@ -1,5 +1,6 @@
 ## 1.7.6
 
+* Impresión imagen: siempre envía `^LT` (incl. `^LT0`) para no heredar offset tras 12up.
 * `MediaCalibrationProfile.tearOffDots` → SGD `ezpl.tear_off` al aplicar perfil
   (persistido con `^JUS` cuando `saveSettingsToNvm` es true).
 * Presets Fenicia: `fenicia24Up` tear off **13**, `fenicia12Up` tear off **0**.
